@@ -1,0 +1,12 @@
+# This configmap contains environment variables for the local development.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: imp-doodle-dev
+data:
+  TERM: "xterm"
+
+  #postgres
+  POSTGRES_USER: "postgres"
+  POSTGRES_PASSWORD: "postgres"
+  POSTGRES_DB: "imp_doodle_jump"

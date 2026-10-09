@@ -1,0 +1,33 @@
+pluginManagement {
+  repositories {
+    gradlePluginPortal()
+  }
+}
+
+plugins {
+  // Downloads the Java toolchain (build.gradle: java.toolchain) if no matching JDK is installed.
+  id 'org.gradle.toolchains.foojay-resolver-convention' version '1.0.0'
+}
+
+rootProject.name = 'imp-doodle-jump'
+
+dependencyResolutionManagement {
+  repositories {
+    // Node.js for the frontend build (com.github.node-gradle.node, build.gradle: node.distBaseUrl = null).
+    // Declared here instead of by the plugin, which would add a project repository.
+    ivy {
+      name = 'Node.js'
+      url = 'https://nodejs.org/dist/'
+      patternLayout {
+        artifact 'v[revision]/[artifact](-v[revision]-[classifier]).[ext]'
+      }
+      metadataSources {
+        artifact()
+      }
+      content {
+        includeModule 'org.nodejs', 'node'
+      }
+    }
+    mavenCentral()
+  }
+}

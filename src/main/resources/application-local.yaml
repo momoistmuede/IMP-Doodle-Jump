@@ -1,0 +1,4 @@
+# Local development against the podman pod started via ./gradlew pods-create (see podman/).
+logging:
+  logLevel: DEBUG
+  impLogLevel: DEBUG
