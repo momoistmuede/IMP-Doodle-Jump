@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+  <changeSet id="001-highscore" author="doodle-jump">
+    <comment>Best score per player name</comment>
+    <createTable tableName="highscore">
+      <column name="name" type="varchar(20)">
+        <constraints primaryKey="true" primaryKeyName="pk_highscore"/>
+      </column>
+      <column name="score" type="int">
+        <constraints nullable="false"/>
+      </column>
+      <column name="achieved_at" type="timestamp with time zone">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+    <createIndex tableName="highscore" indexName="ix_highscore_score">
+      <column name="score" descending="true"/>
+    </createIndex>
+  </changeSet>
+
+</databaseChangeLog>

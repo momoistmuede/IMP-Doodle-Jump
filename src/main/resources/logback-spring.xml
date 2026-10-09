@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<configuration>
+  <springProperty scope="context" name="loki4jEnabled" source="logging.loki4j.enabled" defaultValue="false"/>
+  <springProperty scope="context" name="loki4jUrl" source="logging.loki4j.url" defaultValue="http://localhost:3100/loki/api/v1/push"/>
+  <springProperty scope="context" name="loki4jBatchSize" source="logging.loki4j.batch-size" defaultValue="100"/>
+  <springProperty scope="context" name="loki4jBatchTimeoutMs" source="logging.loki4j.batch-timeout-ms" defaultValue="1000"/>
+  <springProperty scope="context" name="appName" source="spring.application.name" defaultValue="app"/>
+  <springProperty scope="context" name="logLevel" source="logging.logLevel" defaultValue="INFO"/>
+  <springProperty scope="context" name="impLogLevel" source="logging.impLogLevel" defaultValue="DEBUG"/>
+  <springProperty scope="context" name="rollingFileEnabled" source="logging.rollingFile.enabled" defaultValue="false"/>
+  <springProperty scope="context" name="rollingFileMaxHistory" source="logging.rollingFile.maxHistory" defaultValue="30"/>
+  <springProperty scope="context" name="rollingFileTotalSizeCap" source="logging.rollingFile.totalSizeCap" defaultValue="1GB"/>
+
+  <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+  <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+  <if condition='property("loki4jEnabled").equals("true")'>
+    <then>
+      <appender name="LOKI" class="com.github.loki4j.logback.Loki4jAppender">
+        <http>
+          <url>${loki4jUrl}</url>
+        </http>
+        <format>
+          <label>
+            <pattern>app=${appName},host=${HOSTNAME},level=%level</pattern>
+          </label>
+          <message>
+            <pattern>l=%level c=%logger{20} t=%thread | %msg %ex</pattern>
+          </message>
+        </format>
+        <batchSize>${loki4jBatchSize}</batchSize>
+        <batchTimeoutMs>${loki4jBatchTimeoutMs}</batchTimeoutMs>
+      </appender>
+    </then>
+  </if>
+
+  <appender name="ROLLING_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+    <file>./logs/${appName}.log</file>
+    <rollingPolicy class="ch.qos.logback.core.rolling.TimeBasedRollingPolicy">
+      <fileNamePattern>./logs/${appName}.%d{yyyy-MM-dd}.log</fileNamePattern>
+      <maxHistory>${rollingFileMaxHistory}</maxHistory>
+      <totalSizeCap>1GB</totalSizeCap>
+    </rollingPolicy>
+    <encoder>
+      <pattern>%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n</pattern>
+    </encoder>
+  </appender>
+
+  <if condition='property("loki4jEnabled").equals("true")'>
+    <then>
+      <if condition='property("rollingFileEnabled").equals("true")'>
+        <then>
+          <root level="${logLevel}">
+            <appender-ref ref="ROLLING_FILE"/>
+            <appender-ref ref="LOKI"/>
+          </root>
+        </then>
+        <else>
+          <root level="${logLevel}">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="LOKI"/>
+          </root>
+        </else>
+      </if>
+    </then>
+    <else>
+      <if condition='property("rollingFileEnabled").equals("true")'>
+        <then>
+          <root level="${logLevel}">
+            <appender-ref ref="ROLLING_FILE"/>
+          </root>
+        </then>
+        <else>
+          <root level="${logLevel}">
+            <appender-ref ref="CONSOLE"/>
+          </root>
+        </else>
+      </if>
+    </else>
+  </if>
+
+  <logger name="de.imp" level="${impLogLevel}"/>
+
+</configuration>
