@@ -13,6 +13,103 @@ Plattformen: grün = normal, blau = bewegt sich, braun = bricht weg (trägt nich
 Ab etwa 1500 px Höhe tauchen Monster auf: abschießen oder von oben draufspringen; seitlich oder von
 unten berührt fällt man herunter. Punkte = Höhe / 10 + 50 pro Monster.
 
+## Schnellstart: klonen und ausführen
+
+Getestet unter macOS (Apple Silicon). Die Gradle-Tasks für Datenbank und App sind Shell-Skripte und
+laufen daher unter macOS/Linux, nicht unter Windows.
+
+### Voraussetzungen
+
+| Was | Wofür | Prüfen mit |
+|---|---|---|
+| Git | Klonen | `git --version` |
+| JDK 17 oder neuer | Startet Gradle. Java 21 für Build und App lädt Gradle bei Bedarf selbst herunter | `java -version` |
+| Podman | Lokale PostgreSQL-Datenbank im Container | `podman --version` |
+| Freie Ports 9000 und 5434 | App bzw. PostgreSQL | `lsof -i :9000 -i :5434` (keine Ausgabe = frei) |
+
+Node.js/npm und Gradle selbst müssen **nicht** installiert sein: Der Gradle-Wrapper (`./gradlew`) lädt
+Gradle, und Gradle lädt Node.js für den Frontend-Build. `curl` und `lsof` (für `app-start`) sind unter
+macOS vorinstalliert.
+
+Podman unter macOS einmalig einrichten (falls `podman machine ls` keine Maschine zeigt):
+
+```sh
+podman machine init     # legt die Linux-VM für Container an (einmalig, dauert etwas)
+podman machine start
+```
+
+### 1. Klonen
+
+```sh
+git clone https://github.com/momoistmuede/IMP-Doodle-Jump.git
+cd IMP-Doodle-Jump
+```
+
+Alle weiteren Befehle laufen im Projektverzeichnis.
+
+### 2. Datenbank starten (einmalig)
+
+```sh
+./gradlew pods-create
+```
+
+Startet die Podman-Maschine (falls nötig) und einen PostgreSQL-Container `imp-doodle-postgres` auf
+`localhost:5434` mit der leeren Datenbank `imp_doodle_jump` (Benutzer/Passwort `postgres`/`postgres`).
+Die Daten liegen in `podman/volumes/postgres` und bleiben über Neustarts erhalten. Die Tabelle legt die
+App beim ersten Start selbst an (Liquibase).
+
+Nach einem Rechner-Neustart reicht `./gradlew pods-start`.
+
+### 3. App bauen und starten
+
+```sh
+./gradlew app-start
+```
+
+Baut Backend und Frontend, startet die App im Hintergrund und wartet, bis sie erreichbar ist. Ausgabe am
+Ende:
+
+```
+App is up: http://localhost:9000
+```
+
+Der erste Lauf dauert einige Minuten (Download von Gradle, Java 21, Node.js und aller Abhängigkeiten),
+danach etwa 30 Sekunden.
+
+### 4. Spielen
+
+http://localhost:9000 im Browser öffnen → **Play**. Das Log der App steht in `build/app/app.log`.
+
+### 5. Beenden
+
+```sh
+./gradlew app-stop      # App stoppen
+./gradlew pods-stop     # Datenbank stoppen (optional, Daten bleiben erhalten)
+```
+
+### Nach Code-Änderungen
+
+```sh
+git pull
+./gradlew app-restart   # stoppt, baut neu und startet
+```
+
+### Wenn etwas nicht klappt
+
+| Meldung | Ursache und Lösung |
+|---|---|
+| `Postgres is not running. Run ./gradlew pods-create …` | Datenbank-Container läuft nicht: `./gradlew pods-start` (oder beim ersten Mal `pods-create`) |
+| `App exited during startup … Connection refused` | Wie oben: Datenbank läuft nicht |
+| `Port 9000 is already in use` | Ein anderer Prozess belegt Port 9000; die Ausgabe zeigt welcher. Beenden oder in `application.yaml` `server.port` ändern |
+| `App is already running` | Die App läuft schon; neu starten mit `./gradlew app-restart` |
+| `podman machine` startet nicht / `no machine` | Podman-Maschine fehlt: `podman machine init`, dann `podman machine start` |
+| Port 5434 belegt | Ein anderer Container nutzt ihn; `hostPort` in `podman/local-dev/pod-postgres.yaml` und die URL in `application.yaml` (`DOODLE_DB_URL`) anpassen |
+| Sonstiger Fehler beim Start | `build/app/app.log` ansehen |
+
+Für die Backend-Tests (`./gradlew build`) muss Testcontainers Podman finden. Unter macOS dafür einmalig
+`sudo podman-mac-helper install` ausführen und die Podman-Maschine neu starten (`podman machine stop`,
+`podman machine start`). Zum reinen Spielen ist das nicht nötig.
+
 ## Highscores
 
 Tabelle `highscore` (`name` als Primärschlüssel, `score`, `achieved_at`). Pro Name wird nur der beste
@@ -26,12 +123,7 @@ Namen werden getrimmt, sind max. 20 Zeichen lang und unterscheiden Groß-/Kleins
 
 Swagger UI: http://localhost:9000/openapi/swagger-ui.html
 
-## Lokal starten
-
-```sh
-./gradlew pods-create   # einmalig: Postgres-Pod auf localhost:5434 (DB imp_doodle_jump)
-./gradlew app-start     # baut und startet die App im Hintergrund → http://localhost:9000
-```
+## Gradle-Tasks für die lokale Entwicklung
 
 | Task | Zweck |
 |---|---|
