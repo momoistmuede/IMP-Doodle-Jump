@@ -1,0 +1,58 @@
+server:
+  port: 9000
+
+spring:
+  application:
+    name: imp-doodle-jump
+  jackson:
+    time-zone: UTC
+  banner:
+    location: classpath:imp.txt
+
+  web:
+    locale: de
+    locale-resolver: fixed
+
+  # Highscores live in schema public (Liquibase's own bookkeeping tables as well).
+  datasource:
+    url: ${DOODLE_DB_URL:jdbc:postgresql://localhost:5434/imp_doodle_jump}
+    username: ${DOODLE_DB_USER:postgres}
+    password: ${DOODLE_DB_PASSWORD:postgres}
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    default-schema: public
+    liquibase-schema: public
+    analytics-enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "info,health,metrics,prometheus"
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  swagger-ui:
+    path: /openapi/swagger-ui.html
+    query-config-enabled: false
+    enabled: true
+  api-docs:
+    path: /openapi
+    enabled: true
+  packages-to-scan: de.imp.doodlejump.rest
+
+# Logging configuration — see logback-spring.xml
+logging:
+  logLevel: INFO
+  impLogLevel: INFO
+  rollingFile:
+    enabled: false
+    maxHistory: 30
+    totalSizeCap: 1GB
+  loki4j:
+    enabled: false
+    url: http://localhost:3100/loki/api/v1/push
+    batch-size: 100
+    batch-timeout-ms: 1000

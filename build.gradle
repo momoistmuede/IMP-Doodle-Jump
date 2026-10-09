@@ -1,0 +1,237 @@
+import com.github.gradle.node.npm.task.NpmTask
+
+plugins {
+  id 'java'
+  id 'org.springframework.boot' version '4.0.3'
+  id 'io.spring.dependency-management' version '1.1.7'
+  id 'org.cyclonedx.bom' version '2.1.0'
+  id 'com.github.node-gradle.node' version '7.1.0'
+}
+
+group = 'de.imp.doodlejump'
+version = '0.1.0'
+
+java {
+  toolchain {
+    languageVersion = JavaLanguageVersion.of(21)
+  }
+}
+
+bootJar {
+  archiveFileName = project.name + ".jar"
+}
+
+ext {
+  set('springBootVersion', "4.0.3")
+}
+
+configurations {
+  compileOnly {
+    extendsFrom annotationProcessor
+  }
+}
+
+test {
+  useJUnitPlatform()
+}
+
+// --- CycloneDX SBOM ------------------------------------------------------------------------
+cyclonedxBom {
+  includeConfigs = ["runtimeClasspath"]
+  skipConfigs = ["compileClasspath", "testCompileClasspath"]
+  projectType = "application"
+  schemaVersion = "1.5"
+  outputFormat = "json"
+  outputName = "application"
+}
+
+tasks.named("processResources") {
+  dependsOn(cyclonedxBom)
+  from(layout.buildDirectory.dir("reports")) {
+    include "application.cdx.json"
+    into "META-INF/sbom"
+  }
+}
+
+// --- Frontend (React + MUI, frontend/) -------------------------------------------------------
+// Built with a Node.js that com.github.node-gradle.node downloads itself. The result is packaged
+// into classpath:/static, from where Spring Boot serves it (see de.imp.doodlejump.frontend).
+// -PskipFrontend skips it for backend-only iterations; the jar then contains no frontend.
+node {
+  version = '22.23.1'
+  download = true
+  distBaseUrl = null // repository declared in settings.gradle (keeps the configuration cache working)
+  nodeProjectDir = file('frontend')
+  npmInstallCommand = 'ci'
+}
+
+def frontendSources = files('frontend/src', 'frontend/public', 'frontend/index.html', 'frontend/vite.config.ts',
+    'frontend/tsconfig.json', 'frontend/package.json', 'frontend/package-lock.json')
+def skipFrontend = providers.gradleProperty('skipFrontend').isPresent()
+
+tasks.named('npmInstall') {
+  group = 'frontend'
+}
+
+def frontendBuild = tasks.register('frontendBuild', NpmTask) {
+  group = 'frontend'
+  description = 'Type-checks and builds the frontend into frontend/dist.'
+  dependsOn 'npmInstall'
+  args.set(['run', 'build'])
+  inputs.files(frontendSources)
+  outputs.dir('frontend/dist')
+}
+
+def frontendTest = tasks.register('frontendTest', NpmTask) {
+  group = 'frontend'
+  description = 'Runs the frontend unit tests (vitest).'
+  dependsOn 'npmInstall'
+  args.set(['test'])
+  inputs.files(frontendSources)
+  def marker = layout.buildDirectory.file('frontend-test/passed')
+  outputs.file(marker)
+  doLast {
+    marker.get().asFile.text = 'ok'
+  }
+}
+
+if (!skipFrontend) {
+  tasks.named('processResources') {
+    from(frontendBuild) {
+      into 'static'
+    }
+  }
+  tasks.named('check') {
+    dependsOn frontendTest
+  }
+}
+
+dependencies {
+  implementation "org.springframework.boot:spring-boot-starter-web:${springBootVersion}"
+  implementation "org.springframework.boot:spring-boot-starter-actuator:${springBootVersion}"
+  implementation "org.springframework.boot:spring-boot-starter-validation:${springBootVersion}"
+  implementation "org.springframework.boot:spring-boot-starter-logging:${springBootVersion}"
+
+  implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:3.0.0'
+
+  // logback-spring.xml: Loki-Appender und <if>-Bedingungen (janino)
+  implementation 'com.github.loki4j:loki-logback-appender:1.5.1'
+  implementation 'org.codehaus.janino:janino:3.1.10'
+
+  compileOnly 'org.projectlombok:lombok:1.18.34'
+  annotationProcessor 'org.projectlombok:lombok:1.18.34'
+  testCompileOnly 'org.projectlombok:lombok:1.18.34'
+  testAnnotationProcessor 'org.projectlombok:lombok:1.18.34'
+
+  runtimeOnly 'io.micrometer:micrometer-registry-prometheus'
+
+  // --- Highscores --------------------------------------------------------------------------
+  implementation "org.springframework.boot:spring-boot-starter-jdbc:${springBootVersion}"
+  implementation "org.springframework.boot:spring-boot-starter-liquibase:${springBootVersion}"
+  runtimeOnly 'org.postgresql:postgresql'
+
+  testImplementation "org.springframework.boot:spring-boot-starter-test:${springBootVersion}"
+  testImplementation "org.springframework.boot:spring-boot-webmvc-test:${springBootVersion}"
+  testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+  testImplementation "org.springframework.boot:spring-boot-testcontainers:${springBootVersion}"
+  testImplementation 'org.testcontainers:testcontainers-junit-jupiter'
+  testImplementation 'org.testcontainers:testcontainers-postgresql'
+}
+
+// -------------------------------------------------------------------------------------------
+// Lokale Entwicklung: Postgres-Pod (podman-dev), Datenbank und App (local-dev).
+// Typischer Ablauf: pods-create → app-start; frische Datenbank: db-recreate → app-restart.
+// -------------------------------------------------------------------------------------------
+abstract class ScriptTask extends DefaultTask {
+
+  @Inject
+  abstract ExecOperations getExecOperations()
+
+  @Input
+  abstract Property<String> getScript()
+
+  /** Additional environment variables for the script. */
+  @Input
+  abstract MapProperty<String, String> getEnvironment()
+
+  @TaskAction
+  void run() {
+    execOperations.exec {
+      commandLine 'sh', script.get()
+      environment(this.environment.get())
+    }
+  }
+}
+
+tasks.register('ensurePodmanMachineRunning', ScriptTask) {
+  group = 'podman-dev'
+  description = 'Ensures the local podman machine is running.'
+  script.set('podman/scripts/preparePodman.sh')
+}
+
+tasks.register('pods-create', ScriptTask) {
+  dependsOn 'ensurePodmanMachineRunning'
+  group = 'podman-dev'
+  description = 'Create and start pods, replacing any previously created pods.'
+  script.set('podman/scripts/create.sh')
+}
+
+tasks.register('pods-start', ScriptTask) {
+  dependsOn 'ensurePodmanMachineRunning'
+  group = 'podman-dev'
+  description = 'Start previously created pods.'
+  script.set('podman/scripts/start.sh')
+}
+
+tasks.register('pods-stop', ScriptTask) {
+  group = 'podman-dev'
+  description = 'Stop previously started pods.'
+  script.set('podman/scripts/stop.sh')
+}
+
+tasks.register('pods-clear', ScriptTask) {
+  group = 'podman-dev'
+  description = 'Remove all pods and volumes.'
+  script.set('podman/scripts/clear.sh')
+}
+
+def dbDrop = tasks.register('db-drop', ScriptTask) {
+  group = 'local-dev'
+  description = 'Drop the local database imp_doodle_jump including all highscores.'
+  script.set('podman/scripts/db-drop.sh')
+}
+
+def dbCreate = tasks.register('db-create', ScriptTask) {
+  group = 'local-dev'
+  description = 'Create the local database imp_doodle_jump (tables are created on app start).'
+  script.set('podman/scripts/db-create.sh')
+  mustRunAfter dbDrop
+}
+
+tasks.register('db-recreate') {
+  group = 'local-dev'
+  description = 'Drop and create the local database: empty highscores.'
+  dependsOn dbDrop, dbCreate
+}
+
+def appStop = tasks.register('app-stop', ScriptTask) {
+  group = 'local-dev'
+  description = 'Stop the app started with app-start.'
+  script.set('scripts/app-stop.sh')
+}
+
+def appStart = tasks.register('app-start', ScriptTask) {
+  group = 'local-dev'
+  description = 'Build and start the app in the background (profile local) on http://localhost:9000.'
+  dependsOn bootJar
+  mustRunAfter appStop, dbCreate
+  script.set('scripts/app-start.sh')
+  // Same Java as the build (java.toolchain above), not the one on the PATH.
+  environment.put('JAVA_BIN', javaToolchains.launcherFor(java.toolchain).map { it.executablePath.asFile.absolutePath })
+}
+
+tasks.register('app-restart') {
+  group = 'local-dev'
+  description = 'Stop the app, rebuild and start it again.'
+  dependsOn appStop, appStart
+}

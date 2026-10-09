@@ -1,0 +1,24 @@
+server:
+  port: 9000
+  ssl:
+    enabled: true
+    # PEM certificate (chain) and private key. The bundled pair is a self-signed development certificate
+    # of this project (CN=localhost, SAN localhost/127.0.0.1); for a real host use file:/app/server.crt
+    # and file:/app/server.key and mount the real certificate there.
+    certificate: classpath:/server.crt
+    certificate-private-key: classpath:/server.key
+    # Only needed for an encrypted (PKCS#8) key:
+    # certificate-private-key-password: ${SERVER_SSL_KEY_PASSWORD}
+
+logging:
+  logLevel: INFO
+  impLogLevel: INFO
+  rollingFile:
+    enabled: false
+    maxHistory: 30
+    totalSizeCap: 1GB
+  loki4j:
+    enabled: false
+    url: http://localhost:3100/loki/api/v1/push
+    batch-size: 100
+    batch-timeout-ms: 1000
