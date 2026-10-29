@@ -92,6 +92,9 @@ export interface Input {
   fire: boolean;
 }
 
+/** Something that happened during `update`, for the HUD; the caller empties `state.events`. */
+export type GameEvent = { type: 'kill'; x: number; y: number; points: number };
+
 export interface GameState {
   player: Player;
   platforms: Platform[];
@@ -111,6 +114,7 @@ export interface GameState {
   lastMonsterY: number;
   nextId: number;
   random: () => number;
+  events: GameEvent[];
 }
 
 export function createInput(): Input {
@@ -156,6 +160,7 @@ export function createGame(random: () => number = Math.random): GameState {
     lastMonsterY: 0,
     nextId: 2,
     random,
+    events: [],
   };
   generatePlatforms(state);
   return state;
@@ -322,7 +327,7 @@ function moveMonsters(state: GameState, previousPlayerY: number) {
     if (player.vy > 0 && previousPlayerY + PLAYER_HEIGHT <= monster.y + MONSTER_HEIGHT / 2) {
       // Jumped on top of it.
       killed.add(monster.id);
-      state.kills++;
+      killMonster(state, monster);
       player.vy = -JUMP_VELOCITY;
       player.standingOn = null;
     } else {
@@ -345,12 +350,17 @@ function moveBullets(state: GameState, dt: number) {
     );
     if (target) {
       state.monsters = state.monsters.filter((m) => m !== target);
-      state.kills++;
+      killMonster(state, target);
     } else if (bullet.y > state.cameraY - 50) {
       remaining.push(bullet);
     }
   }
   state.bullets = remaining;
+}
+
+function killMonster(state: GameState, monster: Monster) {
+  state.kills++;
+  state.events.push({ type: 'kill', x: monster.x + MONSTER_WIDTH / 2, y: monster.y, points: KILL_BONUS });
 }
 
 function overlaps(ax: number, ay: number, aw: number, ah: number, bx: number, by: number, bw: number, bh: number, inset: number): boolean {

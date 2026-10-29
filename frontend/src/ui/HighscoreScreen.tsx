@@ -1,6 +1,6 @@
-import EmojiEventsIcon from '@mui/icons-material/EmojiEvents';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import Alert from '@mui/material/Alert';
+import Box from '@mui/material/Box';
 import Button from '@mui/material/Button';
 import Card from '@mui/material/Card';
 import CardContent from '@mui/material/CardContent';
@@ -9,40 +9,51 @@ import Stack from '@mui/material/Stack';
 import Table from '@mui/material/Table';
 import TableBody from '@mui/material/TableBody';
 import TableCell from '@mui/material/TableCell';
-import TableHead from '@mui/material/TableHead';
 import TableRow from '@mui/material/TableRow';
 import Typography from '@mui/material/Typography';
-import { useEffect, useState } from 'react';
-import { fetchHighscores, type Highscore, type SubmitResult } from '../api';
+import { useEffect } from 'react';
+import type { HighscoreList } from '../App';
+import type { SubmitResult } from '../api';
+import { PALETTE } from '../game/palette';
+import { formatScore, TOP_PLACES } from '../game/scoreboard';
 import { Controls } from './Controls';
-import { Logo } from './Logo';
+import { Title } from './Title';
+import { blink } from './theme';
 
 const TROPHY = ['#d4a017', '#9e9e9e', '#b06c2c'];
+const ORDINALS = ['1ST', '2ND', '3RD', '4TH', '5TH', '6TH', '7TH', '8TH', '9TH', '10TH'];
 
 interface Props {
   onPlay: () => void;
   /** Result of the score just saved: highlights the player and shows how it went. */
   lastResult: SubmitResult | null;
+  highscores: HighscoreList;
 }
 
-export function HighscoreScreen({ onPlay, lastResult }: Props) {
-  const [highscores, setHighscores] = useState<Highscore[] | null>(null);
-  const [error, setError] = useState<string | null>(null);
+export function HighscoreScreen({ onPlay, lastResult, highscores }: Props) {
+  const { entries, error } = highscores;
 
+  // Space or Enter starts a round; a key still held from the last round does not count.
   useEffect(() => {
-    fetchHighscores().then(setHighscores, (e: unknown) => setError(e instanceof Error ? e.message : String(e)));
-  }, []);
+    const onKeyDown = (event: KeyboardEvent) => {
+      if ((event.code === 'Space' || event.code === 'Enter') && !event.repeat) {
+        event.preventDefault();
+        onPlay();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onPlay]);
+
+  // Always all 10 places: empty ones invite others to fill them.
+  const places = Array.from({ length: TOP_PLACES }, (_, i) => entries?.[i] ?? null);
+  const firstEmpty = places.indexOf(null);
 
   return (
-    <Card sx={{ width: '100%', maxWidth: 480 }} elevation={4}>
+    <Card sx={{ width: '100%', maxWidth: 640 }}>
       <CardContent>
         <Stack spacing={3} sx={{ alignItems: 'center' }}>
-          <Stack spacing={1} sx={{ alignItems: 'center' }}>
-            <Logo height={48} />
-            <Typography variant="h4" component="h1" sx={{ fontWeight: 800 }}>
-              Doodle Jump
-            </Typography>
-          </Stack>
+          <Title />
 
           {lastResult && (
             <Alert severity={lastResult.newBest ? 'success' : 'info'} sx={{ width: '100%' }}>
@@ -52,53 +63,82 @@ export function HighscoreScreen({ onPlay, lastResult }: Props) {
             </Alert>
           )}
 
-          <Stack spacing={1} sx={{ width: '100%' }}>
-            <Typography variant="overline" color="text.secondary" component="h2">
-              Highscores
+          <Stack spacing={1} sx={{ width: '100%', alignItems: 'center' }}>
+            <Typography variant="h2" component="h2" sx={{ color: PALETTE.yellow }}>
+              ★ HIGH SCORES ★
             </Typography>
-            {error && <Alert severity="error">{error}</Alert>}
-            {!error && !highscores && <CircularProgress size={28} sx={{ alignSelf: 'center' }} />}
-            {highscores && highscores.length === 0 && (
-              <Typography color="text.secondary" sx={{ textAlign: 'center', py: 2 }}>
-                Noch keine Highscores – sei der Erste!
-              </Typography>
+            {error && (
+              <Alert severity="error" sx={{ width: '100%' }}>
+                {error}
+              </Alert>
             )}
-            {highscores && highscores.length > 0 && (
-              <Table size="small">
-                <TableHead>
-                  <TableRow>
-                    <TableCell sx={{ width: 56 }}>Platz</TableCell>
-                    <TableCell>Name</TableCell>
-                    <TableCell align="right">Punkte</TableCell>
-                  </TableRow>
-                </TableHead>
+            {!error && !entries && <CircularProgress size={28} />}
+            {entries && (
+              <Table size="small" aria-label="Highscores">
                 <TableBody>
-                  {highscores.map((entry, index) => (
-                    <TableRow key={entry.name} selected={entry.name === lastResult?.best.name}>
-                      <TableCell>
-                        {index < TROPHY.length ? (
-                          <EmojiEventsIcon fontSize="small" sx={{ color: TROPHY[index], verticalAlign: 'middle' }} aria-label={`Platz ${index + 1}`} />
-                        ) : (
-                          index + 1
-                        )}
-                      </TableCell>
-                      <TableCell sx={{ fontWeight: index === 0 ? 700 : undefined }}>{entry.name}</TableCell>
-                      <TableCell align="right" sx={{ fontVariantNumeric: 'tabular-nums' }}>
-                        {entry.score.toLocaleString('de-DE')}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                  {places.map((entry, index) => {
+                    const own = entry !== null && entry.name === lastResult?.best.name;
+                    const color = entry ? (TROPHY[index] ?? PALETTE.white) : PALETTE.greyDark;
+                    return (
+                      <TableRow key={index} sx={own ? { animation: `${blink} 1s steps(1) infinite` } : undefined}>
+                        <TableCell sx={{ color, width: 88 }}>{ORDINALS[index]}</TableCell>
+                        <TableCell sx={{ width: 32, px: 0 }}>
+                          <Silhouette />
+                        </TableCell>
+                        <TableCell sx={{ color, overflowWrap: 'anywhere' }}>
+                          {entry ? (
+                            entry.name
+                          ) : index === firstEmpty ? (
+                            <Box component="span" sx={{ color: PALETTE.yellow, animation: `${blink} 1s steps(1) infinite` }}>
+                              DEIN NAME?
+                            </Box>
+                          ) : (
+                            '---------'
+                          )}
+                        </TableCell>
+                        <TableCell align="right" sx={{ color }}>
+                          {formatScore(entry?.score ?? 0)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
                 </TableBody>
               </Table>
             )}
           </Stack>
 
-          <Button variant="contained" size="large" startIcon={<PlayArrowIcon />} onClick={onPlay} autoFocus sx={{ px: 6, py: 1.5, fontSize: '1.2rem' }}>
-            Play
-          </Button>
+          <Stack spacing={1.5} sx={{ alignItems: 'center' }}>
+            <Typography variant="body2" sx={{ color: PALETTE.yellow, animation: `${blink} 1.2s steps(1) infinite` }}>
+              ▶ PRESS SPACE TO START ◀
+            </Typography>
+            <Button variant="contained" size="large" startIcon={<PlayArrowIcon />} onClick={onPlay} sx={{ px: 6 }}>
+              Play
+            </Button>
+          </Stack>
           <Controls />
         </Stack>
       </CardContent>
     </Card>
+  );
+}
+
+/** Placeholder figure in front of a name, until players have a skin. */
+function Silhouette() {
+  return (
+    <Box
+      aria-hidden
+      sx={{
+        width: 24,
+        height: 24,
+        display: 'grid',
+        placeItems: 'center',
+        bgcolor: PALETTE.slate,
+        color: PALETTE.grey,
+        fontSize: 16,
+        borderRadius: '12px 12px 2px 2px',
+      }}
+    >
+      ?
+    </Box>
   );
 }
