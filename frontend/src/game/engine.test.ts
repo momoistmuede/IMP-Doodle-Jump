@@ -333,4 +333,61 @@ describe('engine', () => {
       expect(below).toBeDefined();
     });
   });
+
+  describe('events', () => {
+    it('reports a jump once per take-off', () => {
+      const state = emptyGame();
+      const input = createInput();
+      input.jump = true;
+      update(state, input, DT);
+      expect(state.events.filter((e) => e.type === 'jump')).toHaveLength(1);
+      state.events = [];
+      input.jump = false;
+      run(state, input, 0.3);
+      expect(state.events.filter((e) => e.type === 'jump')).toHaveLength(0);
+    });
+
+    it('reports exactly one spring when landing on a spring', () => {
+      const state = emptyGame();
+      state.platforms[0].spring = true;
+      state.player.standingOn = null;
+      state.player.y -= 30;
+      state.player.vy = 300;
+      let springs = 0;
+      for (let i = 0; i < 10; i++) {
+        update(state, createInput(), DT);
+        springs += state.events.filter((e) => e.type === 'spring').length;
+        state.events = [];
+      }
+      expect(springs).toBe(1);
+      expect(state.player.vy).toBeLessThan(-JUMP_VELOCITY);
+    });
+
+    it('reports shots, breaking platforms and how a monster died', () => {
+      const state = emptyGame();
+      const p = state.player;
+      state.monsters.push({ id: 999, x: p.x - 5, y: p.y - 300, baseX: p.x - 5, phase: -Math.PI / 2 });
+      state.time = Math.PI / 4;
+      const input = createInput();
+      input.fire = true;
+      const events: string[] = [];
+      for (let i = 0; i < 30; i++) {
+        update(state, input, DT);
+        input.fire = false;
+        events.push(...state.events.map((e) => (e.type === 'kill' ? `kill:${e.by}` : e.type)));
+        state.events = [];
+      }
+      expect(events).toEqual(['shoot', 'monsterNear', 'kill:shot']);
+    });
+
+    it('announces a monster before it comes into view', () => {
+      const state = emptyGame();
+      state.monsters.push({ id: 999, x: 100, y: state.cameraY - MONSTER_HEIGHT - 100, baseX: 100, phase: 0 });
+      update(state, createInput(), DT);
+      expect(state.events).toContainEqual({ type: 'monsterNear' });
+      state.events = [];
+      update(state, createInput(), DT);
+      expect(state.events).toEqual([]);
+    });
+  });
 });

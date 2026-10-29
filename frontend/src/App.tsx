@@ -5,6 +5,7 @@ import GlobalStyles from '@mui/material/GlobalStyles';
 import { ThemeProvider } from '@mui/material/styles';
 import { useCallback, useEffect, useState } from 'react';
 import { fetchHighscores, type Highscore, type SubmitResult } from './api';
+import { sound } from './audio/sound';
 import { GameOverScreen } from './ui/GameOverScreen';
 import { GameScreen } from './ui/GameScreen';
 import { HighscoreScreen } from './ui/HighscoreScreen';
@@ -28,7 +29,29 @@ export function App() {
   const [screen, setScreen] = useState<Screen>({ kind: 'highscores', lastResult: null });
   const [highscores, setHighscores] = useState<HighscoreList>({ entries: null, error: null });
   // A new round number remounts GameScreen, which starts a fresh game.
-  const play = () => setScreen((s) => ({ kind: 'playing', round: 'round' in s ? s.round + 1 : 1 }));
+  const play = useCallback(() => {
+    sound.unlock();
+    sound.play('insertCoin');
+    setScreen((s) => ({ kind: 'playing', round: 'round' in s ? s.round + 1 : 1 }));
+  }, []);
+
+  // Audio is only allowed after a user action; M switches the sound on and off everywhere.
+  useEffect(() => {
+    const unlock = () => sound.unlock();
+    const onKeyDown = (event: KeyboardEvent) => {
+      sound.unlock();
+      const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
+      if (event.code === 'KeyM' && !event.repeat && !typing) {
+        sound.toggleMute();
+      }
+    };
+    window.addEventListener('pointerdown', unlock);
+    window.addEventListener('keydown', onKeyDown);
+    return () => {
+      window.removeEventListener('pointerdown', unlock);
+      window.removeEventListener('keydown', onKeyDown);
+    };
+  }, []);
 
   const reload = useCallback(() => {
     fetchHighscores().then(

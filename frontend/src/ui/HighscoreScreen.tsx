@@ -14,9 +14,11 @@ import Typography from '@mui/material/Typography';
 import { useEffect } from 'react';
 import type { HighscoreList } from '../App';
 import type { SubmitResult } from '../api';
+import { sound } from '../audio/sound';
 import { PALETTE } from '../game/palette';
 import { formatScore, TOP_PLACES } from '../game/scoreboard';
 import { Controls } from './Controls';
+import { SoundSettings } from './SoundSettings';
 import { Title } from './Title';
 import { blink } from './theme';
 
@@ -32,6 +34,8 @@ interface Props {
 
 export function HighscoreScreen({ onPlay, lastResult, highscores }: Props) {
   const { entries, error } = highscores;
+
+  useEffect(() => sound.playMusic('title'), []);
 
   // Space or Enter starts a round; a key still held from the last round does not count.
   useEffect(() => {
@@ -50,7 +54,10 @@ export function HighscoreScreen({ onPlay, lastResult, highscores }: Props) {
   const firstEmpty = places.indexOf(null);
 
   return (
-    <Card sx={{ width: '100%', maxWidth: 640 }}>
+    <Card sx={{ width: '100%', maxWidth: 640, position: 'relative' }}>
+      <Box sx={{ position: 'absolute', top: 4, right: 4 }}>
+        <SoundSettings />
+      </Box>
       <CardContent>
         <Stack spacing={3} sx={{ alignItems: 'center' }}>
           <Title />

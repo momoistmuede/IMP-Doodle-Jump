@@ -2,6 +2,8 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef, useState } from 'react';
 import type { Highscore } from '../api';
+import { playEventSounds } from '../audio/gameSounds';
+import { sound } from '../audio/sound';
 import { createGame, createInput, update, VIEW_HEIGHT, WORLD_WIDTH } from '../game/engine';
 import { createHud, FONT_FAMILY, updateHud } from '../game/hud';
 import { Renderer } from '../game/render';
@@ -46,6 +48,7 @@ export function GameScreen({ highscores, onGameOver }: Props) {
     let frame = 0;
     let last = 0;
     let stopped = false;
+    let muffled = false;
     let gameOverTimer: ReturnType<typeof setTimeout> | undefined;
 
     const setKey = (event: KeyboardEvent, down: boolean) => {
@@ -77,8 +80,16 @@ export function GameScreen({ highscores, onGameOver }: Props) {
       last = now;
       update(state, input, dt);
       input.fire = false;
-      updateHud(hud, state, dt);
+      if (updateHud(hud, state, dt)) {
+        sound.play('overtake');
+      }
+      playEventSounds(state.events, state);
       state.events = [];
+      if (state.parachute !== muffled) {
+        muffled = state.parachute;
+        sound.setMuffled(muffled);
+      }
+      hud.muted = sound.current.muted;
 
       // Canvas resolution follows its CSS size and the device pixel ratio.
       const width = Math.round(canvas.clientWidth * devicePixelRatio);
@@ -102,6 +113,7 @@ export function GameScreen({ highscores, onGameOver }: Props) {
       (sprites) => {
         if (stopped) return;
         renderer = new Renderer(ctx, sprites);
+        sound.playMusic('hotline');
         last = performance.now();
         frame = requestAnimationFrame(loop);
       },
@@ -109,6 +121,7 @@ export function GameScreen({ highscores, onGameOver }: Props) {
     );
     return () => {
       stopped = true;
+      sound.setMuffled(false);
       cancelAnimationFrame(frame);
       clearTimeout(gameOverTimer);
       window.removeEventListener('keydown', onKeyDown);
