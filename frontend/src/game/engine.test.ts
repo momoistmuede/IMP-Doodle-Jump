@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import {
   BULLET_SPEED,
+  ENEMY_BULLET_SPEED,
+  MONSTER_TYPES,
+  newMonster,
+  SHOOT_INTERVAL,
   CRUMBLE_DELAY,
   lowestPoint,
   SHORT_PLATFORM_WIDTH,
   spikeOverlaps,
   supports,
   VERTICAL_AMPLITUDE,
+  type Monster,
+  type MonsterKind,
   type Platform,
   fillRange,
   INTRO_DURATION,
@@ -23,6 +29,7 @@ import {
   JUMP_VELOCITY,
   MAX_GAP,
   MONSTER_HEIGHT,
+  MONSTER_WIDTH,
   PLATFORM_WIDTH,
   PLAYER_HEIGHT,
   PLAYER_WIDTH,
@@ -141,7 +148,7 @@ describe('engine', () => {
   it('shoots monsters with F', () => {
     const state = emptyGame();
     const p = state.player;
-    state.monsters.push({ id: 999, x: p.x - 5, y: p.y - 300, baseX: p.x - 5, phase: -Math.PI / 2 });
+    state.monsters.push({ ...newMonster(state, 'wobbler', p.x - 5, p.y - 300), phase: -Math.PI / 2 });
     // Freeze the side-to-side motion at baseX: sin(time * 2 + phase) = 0 with time = π/4.
     state.time = Math.PI / 4;
     const input = createInput();
@@ -156,7 +163,7 @@ describe('engine', () => {
     const state = emptyGame();
     state.lives = 1;
     const p = state.player;
-    state.monsters.push({ id: 999, x: p.x, y: p.y - MONSTER_HEIGHT + 20, baseX: p.x, phase: 0 });
+    state.monsters.push({ ...newMonster(state, 'wobbler', p.x, p.y - MONSTER_HEIGHT + 20), phase: 0 });
     state.time = 0;
     run(state, createInput(), 3);
     expect(state.player.hit).toBe(true);
@@ -188,7 +195,7 @@ describe('engine', () => {
     /** A monster sitting still right next to the standing player. */
     function monsterBeside(state: GameState) {
       const p = state.player;
-      state.monsters.push({ id: 999, x: p.x + 20, y: p.y, baseX: p.x + 20, phase: 0 });
+      state.monsters.push({ ...newMonster(state, 'wobbler', p.x + 20, p.y), phase: 0 });
       state.time = 0; // sin(time * 2 + phase) = 0: the monster stays at baseX for a moment
     }
 
@@ -379,7 +386,7 @@ describe('engine', () => {
     it('reports shots, breaking platforms and how a monster died', () => {
       const state = emptyGame();
       const p = state.player;
-      state.monsters.push({ id: 999, x: p.x - 5, y: p.y - 300, baseX: p.x - 5, phase: -Math.PI / 2 });
+      state.monsters.push({ ...newMonster(state, 'wobbler', p.x - 5, p.y - 300), phase: -Math.PI / 2 });
       state.time = Math.PI / 4;
       const input = createInput();
       input.fire = true;
@@ -395,9 +402,9 @@ describe('engine', () => {
 
     it('announces a monster before it comes into view', () => {
       const state = emptyGame();
-      state.monsters.push({ id: 999, x: 100, y: state.cameraY - MONSTER_HEIGHT - 100, baseX: 100, phase: 0 });
+      state.monsters.push({ ...newMonster(state, 'wobbler', 100, state.cameraY - MONSTER_HEIGHT - 100), phase: 0 });
       update(state, createInput(), DT);
-      expect(state.events).toContainEqual({ type: 'monsterNear' });
+      expect(state.events).toContainEqual({ type: 'monsterNear', kind: 'wobbler' });
       state.events = [];
       update(state, createInput(), DT);
       expect(state.events).toEqual([]);
@@ -675,6 +682,127 @@ describe('engine', () => {
       update(state, createInput(), DT);
       expect(state.parachute).toBe(true);
       expect(state.platforms.filter((p) => p.kind === 'spiked')).toHaveLength(0);
+    });
+  });
+
+  describe('imps', () => {
+    /** A monster high on the screen, far from the player. */
+    function withMonster(kind: MonsterKind) {
+      const state = emptyGame();
+      const monster = newMonster(state, kind, 100, state.cameraY + 100);
+      state.monsters.push(monster);
+      return { state, monster };
+    }
+
+    it('flyers cross the screen and turn at the edges', () => {
+      const { state, monster } = withMonster('flyer');
+      monster.vx = 110;
+      let turned = false;
+      for (let i = 0; i < 400; i++) {
+        update(state, createInput(), DT);
+        expect(monster.x).toBeGreaterThanOrEqual(0);
+        expect(monster.x).toBeLessThanOrEqual(WORLD_WIDTH - MONSTER_WIDTH);
+        turned ||= monster.vx < 0;
+      }
+      expect(turned).toBe(true);
+    });
+
+    it('chasers slowly follow the player and need two shots', () => {
+      const { state, monster } = withMonster('chaser');
+      const distance = () => Math.hypot(monster.x - state.player.x, monster.y - state.player.y);
+      const before = distance();
+      run(state, createInput(), 1);
+      expect(distance()).toBeLessThan(before - 40);
+      expect(distance()).toBeGreaterThan(before - 80);
+
+      monster.x = state.player.x;
+      monster.y = state.player.y - 250;
+      const input = createInput();
+      input.fire = true;
+      update(state, input, DT);
+      run(state, createInput(), 0.25);
+      expect(state.monsters).toContain(monster);
+      expect(monster.hp).toBe(1);
+      monster.x = state.player.x;
+      monster.y = state.player.y - 250;
+      input.fire = true;
+      update(state, input, DT);
+      run(state, createInput(), 0.25);
+      expect(state.monsters).not.toContain(monster);
+      expect(state.score).toBe(MONSTER_TYPES.chaser.bonus);
+    });
+
+    it('shooters throw exceptions while on screen; a hit costs a heart', () => {
+      const { state, monster } = withMonster('shooter');
+      monster.x = monster.baseX = state.player.x - 5;
+      monster.reload = 0.1;
+      const events: string[] = [];
+      for (let t = 0; t < 2; t += DT) {
+        update(state, createInput(), DT);
+        events.push(...state.events.map((e) => (e.type === 'hurt' ? `hurt:${e.cause}` : e.type)));
+        state.events = [];
+      }
+      expect(events).toContain('enemyShot');
+      expect(events).toContain('hurt:exception');
+      expect(state.lives).toBe(MAX_LIVES - 1);
+      expect(ENEMY_BULLET_SPEED).toBeGreaterThan(0);
+    });
+
+    it('shooters stay quiet above the screen', () => {
+      const { state, monster } = withMonster('shooter');
+      monster.y = monster.baseY = state.cameraY - 300;
+      run(state, createInput(), SHOOT_INTERVAL * 2);
+      expect(state.enemyBullets).toHaveLength(0);
+    });
+
+    it('exceptions do nothing while invulnerable', () => {
+      const state = emptyGame();
+      state.invulnerable = 1;
+      state.enemyBullets.push({ id: 900, x: state.player.x + 15, y: state.player.y });
+      update(state, createInput(), DT);
+      expect(state.lives).toBe(MAX_LIVES);
+    });
+
+    it('gives the bonus of the behaviour', () => {
+      for (const kind of ['wobbler', 'flyer', 'chaser', 'shooter'] as const) {
+        const { state, monster } = withMonster(kind);
+        // Jumping on top always kills, whatever the hit points.
+        state.player.standingOn = null;
+        state.player.y = state.cameraY + 100;
+        state.player.vy = 300;
+        monster.x = monster.baseX = state.player.x - 5;
+        monster.y = monster.baseY = state.player.y + PLAYER_HEIGHT + 20;
+        for (let i = 0; i < 30 && state.monsters.includes(monster); i++) {
+          update(state, createInput(), DT);
+        }
+        expect(state.monsters, kind).not.toContain(monster);
+        expect(state.killPoints, kind).toBe(MONSTER_TYPES[kind].bonus);
+      }
+    });
+
+    it('brings the behaviours of each zone with the zone look', () => {
+      const seen = (zone: number) => {
+        const state = createGame(seeded(60 + zone));
+        state.monsters = [];
+        const all = new Map<number, Monster>();
+        for (let i = 0; i < 4000 && all.size < 40; i++) {
+          state.player.standingOn = null;
+          state.player.hit = false;
+          state.invulnerable = 10;
+          state.player.y = state.startY - zone * 10000 - 500 - i * 2;
+          state.player.vy = -JUMP_VELOCITY; // rising: no stomping on the monsters
+          state.cameraY = state.player.y - VIEW_HEIGHT * 0.4;
+          state.chainTopY = Math.min(state.chainTopY, state.cameraY + VIEW_HEIGHT);
+          update(state, createInput(), DT);
+          state.monsters.forEach((m) => all.set(m.id, m));
+        }
+        return [...all.values()];
+      };
+      const zone3 = seen(2);
+      expect(new Set(zone3.map((m) => m.kind))).toEqual(new Set(['flyer', 'chaser']));
+      expect(zone3.every((m) => m.skin.endsWith('@2'))).toBe(true);
+      const zone4 = seen(3);
+      expect(new Set(zone4.map((m) => m.kind))).toEqual(new Set(['chaser', 'shooter']));
     });
   });
 });

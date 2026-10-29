@@ -33,8 +33,10 @@ Plattformen: grün = normal, blau = bewegt sich, braun = bricht weg (trägt nich
 Ab Professional Service: rosa gestrichelt = verschwindet nach einem Sprung; ab Projektmanagement: Stein =
 zerbröselt 1 s nach der Landung, gelb = fährt auf und ab; ab Development: kurze, schnellere Plattformen;
 ab Operations: **Stacheln** – wer darauf landet, verliert ein Herz.
-Ab 150 m tauchen Imps auf: abschießen oder von oben draufspringen. Punkte = Höhe in Metern + 50 pro Imp
-+ Bonuspunkte aus Fundstücken.
+Ab 150 m tauchen **Imps** auf, alle im T-Shirt mit IMP-Logo: abschießen oder von oben draufspringen.
+Telefon-Imps wackeln auf der Stelle (50 Punkte), Flieger-Imps fliegen quer durchs Bild (75), Deadline-Imps
+verfolgen einen und brauchen zwei Schüsse (100), Bug-Imps werfen Exceptions nach unten (150). Ab Operations
+tragen die Imps die Farben ihrer Abteilung. Punkte = Höhe in Metern + Imp-Bonus + Fundstücke.
 
 ## Schnellstart: klonen und ausführen
 
