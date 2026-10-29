@@ -7,5 +7,6 @@
 
   <!-- One file per change; applied files are never edited. -->
   <include file="changes/001-highscore.xml" relativeToChangelogFile="true"/>
+  <include file="changes/002-player-skin.xml" relativeToChangelogFile="true"/>
 
 </databaseChangeLog>

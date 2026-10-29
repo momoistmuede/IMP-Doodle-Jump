@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+  <changeSet id="002-player-skin" author="doodle-jump">
+    <comment>Look of the player figure per player name, also for players without a highscore</comment>
+    <createTable tableName="player_skin">
+      <column name="name" type="varchar(20)">
+        <constraints primaryKey="true" primaryKeyName="pk_player_skin"/>
+      </column>
+      <column name="body_color" type="char(7)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="shirt_color" type="char(7)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="tentacle_color" type="char(7)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="hat" type="varchar(20)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="glasses" type="varchar(20)">
+        <constraints nullable="false"/>
+      </column>
+      <column name="updated_at" type="timestamp with time zone">
+        <constraints nullable="false"/>
+      </column>
+    </createTable>
+  </changeSet>
+
+</databaseChangeLog>
