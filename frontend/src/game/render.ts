@@ -12,9 +12,10 @@ import {
   type Player,
   type PowerUp,
 } from './engine';
-import { drawHud, drawPopups, type Hud } from './hud';
+import { drawHud, drawPopups, FONT_FAMILY, type Hud } from './hud';
 import { PALETTE } from './palette';
 import type { SpriteName, Sprites } from './sprites';
+import { PIXELS_PER_METER, ZONE_HEIGHT_M, ZONES, zoneIndexAt } from './zones';
 
 /**
  * Two layers (see docs/konzept-arcade.md, "Grafik"):
@@ -27,6 +28,8 @@ const BACKGROUND_WIDTH = WORLD_WIDTH / ART_PIXEL;
 const BACKGROUND_HEIGHT = VIEW_HEIGHT / ART_PIXEL;
 /** Spacing of the notepad grid, in art pixels. */
 const GRID = 10;
+/** The background blends into the next zone's over this many metres before the zone boundary. */
+const TRANSITION_M = 20;
 /** Imp shirt: centre of the logo relative to the monster position. */
 const LOGO_ANCHOR = { x: MONSTER_WIDTH / 2, y: 30 };
 
@@ -48,7 +51,7 @@ export class Renderer {
   render(state: GameState, hud: Hud, scale: number) {
     const ctx = this.ctx;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    this.drawBackground(state.cameraY);
+    this.drawBackground(state);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.background, 0, 0, WORLD_WIDTH, VIEW_HEIGHT);
     ctx.imageSmoothingEnabled = true;
@@ -89,11 +92,31 @@ export class Renderer {
     drawHud(ctx, hud, state, this.sprites, scale);
   }
 
-  /** The hotline's notepad, in pixel art. Positions are whole art pixels, otherwise slow scrolling flickers. */
-  private drawBackground(cameraY: number) {
+  /**
+   * The zone's background, chosen by the camera height, so it also works during the intro descent.
+   * Until the pixel-art pictures exist, every zone is a flat placeholder colour; only the hotline has
+   * its notepad grid. Before a zone boundary the colours blend over.
+   * Positions are whole art pixels, otherwise slow scrolling flickers.
+   */
+  private drawBackground(state: GameState) {
     const bg = this.backgroundCtx;
-    bg.fillStyle = PALETTE.paper;
+    const meters = (state.startY - (state.cameraY + VIEW_HEIGHT / 2)) / PIXELS_PER_METER;
+    const index = zoneIndexAt(meters);
+    const boundary = (index + 1) * ZONE_HEIGHT_M;
+    const blend = index < ZONES.length - 1 ? Math.min(1, Math.max(0, (meters - (boundary - TRANSITION_M)) / TRANSITION_M)) : 0;
+    const next = ZONES[Math.min(index + 1, ZONES.length - 1)];
+    bg.fillStyle = mixColors(ZONES[index].background, next.background, blend);
     bg.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
+    if (index === 0) {
+      bg.globalAlpha = 1 - blend;
+      this.drawNotepad(state.cameraY);
+      bg.globalAlpha = 1;
+    }
+  }
+
+  /** The hotline's notepad grid. */
+  private drawNotepad(cameraY: number) {
+    const bg = this.backgroundCtx;
     bg.fillStyle = PALETTE.paperLine;
     for (let x = GRID; x < BACKGROUND_WIDTH; x += GRID) {
       bg.fillRect(x, 0, 1, BACKGROUND_HEIGHT);
@@ -135,7 +158,7 @@ export class Renderer {
   private drawPlayer(player: Player, state: GameState, scale: number) {
     const ctx = this.ctx;
     const time = state.time;
-    if (state.parachute) {
+    if (state.parachute || state.phase === 'intro') {
       // Swinging gently under the canopy.
       ctx.save();
       ctx.translate(player.x + PLAYER_WIDTH / 2, player.y);
@@ -170,7 +193,11 @@ export class Renderer {
   private drawPowerUp(powerUp: PowerUp, time: number, scale: number) {
     const ctx = this.ctx;
     const bob = Math.sin(time * 4 + powerUp.id) * 3;
-    this.sprites.draw(ctx, powerUp.kind, powerUp.x, powerUp.y + bob, scale);
+    if (powerUp.kind === 'points') {
+      drawPointsPlaceholder(ctx, powerUp, bob);
+    } else {
+      this.sprites.draw(ctx, powerUp.kind, powerUp.x, powerUp.y + bob, scale);
+    }
     ctx.fillStyle = PALETTE.white;
     for (let i = 0; i < 3; i++) {
       const t = time * 3 + i * 2.1 + powerUp.id;
@@ -206,4 +233,44 @@ export class Renderer {
     this.sprites.draw(ctx, 'imp-logo', LOGO_ANCHOR.x, LOGO_ANCHOR.y, scale);
     ctx.restore();
   }
+}
+
+/**
+ * Placeholder of the points power-up until its zone motif is drawn: a circle in the zone's colour
+ * with the zone number.
+ */
+function drawPointsPlaceholder(ctx: CanvasRenderingContext2D, powerUp: PowerUp, bob: number) {
+  const zone = Math.max(0, ZONES.findIndex((z) => z.pointsSkin === powerUp.skin));
+  const color = ZONES[zone].pointsColor;
+  const cx = powerUp.x + POWER_UP_SIZE / 2;
+  const cy = powerUp.y + POWER_UP_SIZE / 2 + bob;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = PALETTE.black;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, POWER_UP_SIZE / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = `16px ${FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = luminance(color) > 0.5 ? PALETTE.black : PALETTE.white;
+  ctx.fillText(String(zone + 1), cx + 1, cy + 1);
+}
+
+/** Linear mix of two #rrggbb colours. */
+function mixColors(a: string, b: string, t: number): string {
+  const ca = parseHex(a);
+  const cb = parseHex(b);
+  const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
+  return `rgb(${mixed.join(',')})`;
+}
+
+function luminance(color: string): number {
+  const [r, g, b] = parseHex(color);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+function parseHex(color: string): [number, number, number] {
+  return [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16)) as [number, number, number];
 }
