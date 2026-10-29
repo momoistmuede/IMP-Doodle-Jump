@@ -16,7 +16,8 @@ gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md
    Lautsprecher-Symbol auf dem Startbildschirm)
 4. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
    unten aus dem Bild fällt, verliert ein Herz und schwebt am **Fallschirm** auf eine Rettungsplattform
-   30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100).
+   30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100) und ab 300 m selten ein
+   **Raketenrucksack**: 3 s steil nach oben (etwa 270 m), lenkbar und unverwundbar.
 5. Mit dem letzten Herz ist **Game Over**, dann kann man seinen Namen für die Highscores eintragen.
 
 Anzeige im Spiel: der Score groß oben mittig, darunter `HI` (Platz 1) und `NEXT` (der nächste Platz der Top 10,

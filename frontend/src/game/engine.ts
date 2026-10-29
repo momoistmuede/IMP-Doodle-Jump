@@ -82,6 +82,13 @@ const POWER_UP_HOVER = 36;
 export const HEART_BONUS = 100;
 export const POINTS_BONUS = 200;
 
+/** Jetpack: 3 s straight up at a fixed speed (about 270 m); the flame sputters in the last 0.75 s. */
+export const JETPACK_DURATION = 3;
+export const JETPACK_SPEED = 900;
+export const JETPACK_SPUTTER = 0.75;
+/** Short invulnerability after the jetpack falls off, to land safely on the chain. */
+const JETPACK_LANDING_INVULNERABILITY = 1;
+
 /** The intro: floating down on the parachute from the boss's chair to the start (see concept 3.4). */
 export const INTRO_START_M = 7100;
 export const INTRO_DURATION = 10;
@@ -156,7 +163,7 @@ export interface Bullet {
   y: number;
 }
 
-export type PowerUpKind = 'heart' | 'points';
+export type PowerUpKind = 'jetpack' | 'heart' | 'points';
 
 export interface PowerUp {
   id: number;
@@ -213,6 +220,9 @@ export type GameEvent =
   | { type: 'heart' }
   | { type: 'heartBonus'; x: number; y: number; points: number }
   | { type: 'points'; x: number; y: number; points: number }
+  | { type: 'jetpackStart' }
+  | { type: 'jetpackSputter' }
+  | { type: 'jetpackEnd' }
   /** Reached a zone for the first time in this round. */
   | { type: 'zoneEnter'; zone: number }
   | { type: 'introStart' }
@@ -251,6 +261,8 @@ export interface GameState {
   invulnerable: number;
   /** Floating down to the rescue platform after a fall. */
   parachute: boolean;
+  /** Seconds of jetpack flight left (0 = none). */
+  jetpack: number;
   /** Id of the rescue platform while on the parachute. */
   rescueId: number | null;
   over: boolean;
@@ -279,8 +291,21 @@ interface PowerUpType {
   collect: (state: GameState, powerUp: PowerUp) => void;
 }
 
-/** Every power-up is one entry here; the game loop needs no changes for a new one. */
+/**
+ * Every power-up is one entry here; the game loop needs no changes for a new one. The order is the
+ * order of the spawn checks: the rare jetpack first, so the frequent points do not crowd it out.
+ */
 const POWER_UPS: Record<PowerUpKind, PowerUpType> = {
+  jetpack: {
+    chance: () => 0.004,
+    minDistance: 5000,
+    minHeight: 3000,
+    collect: (state) => {
+      state.jetpack = JETPACK_DURATION;
+      state.player.standingOn = null;
+      state.events.push({ type: 'jetpackStart' });
+    },
+  },
   heart: {
     // The more hearts are missing, the likelier a heart: a second chance without giving it away.
     chance: (state) => [0.005, 0.015, 0.03][Math.min(2, MAX_LIVES - state.lives)],
@@ -361,6 +386,7 @@ export function createGame(random: () => number = Math.random, options: { intro?
     zone: 0,
     invulnerable: 0,
     parachute: false,
+    jetpack: 0,
     rescueId: null,
     over: false,
     time: 0,
@@ -368,7 +394,7 @@ export function createGame(random: () => number = Math.random, options: { intro?
     chainTopY: startPlatform.y,
     chainTop: startPlatform,
     lastMonsterY: 0,
-    lastPowerUpY: { heart: Infinity, points: Infinity },
+    lastPowerUpY: { jetpack: Infinity, heart: Infinity, points: Infinity },
     nextId: 2,
     random,
     events: [],
@@ -409,7 +435,7 @@ export function update(state: GameState, input: Input, dt: number): void {
   const player = state.player;
   player.shootPose = Math.max(0, player.shootPose - dt);
 
-  if (input.fire && state.fireCooldown === 0 && !player.hit && !state.parachute) {
+  if (input.fire && state.fireCooldown === 0 && !player.hit && !state.parachute && state.jetpack === 0) {
     state.bullets.push({ id: state.nextId++, x: player.x + PLAYER_WIDTH / 2, y: player.y });
     state.fireCooldown = FIRE_COOLDOWN;
     player.shootPose = 0.2;
@@ -420,6 +446,8 @@ export function update(state: GameState, input: Input, dt: number): void {
   movePlatforms(state, dt);
   if (state.parachute) {
     floatDown(state, input, dt);
+  } else if (state.jetpack > 0) {
+    fly(state, input, dt);
   } else {
     movePlayer(state, input, dt);
   }
@@ -671,6 +699,28 @@ function fellOff(state: GameState) {
   fillRange(state, rescue.y, Number.isFinite(lowest) ? lowest : Math.max(state.chainTopY, state.cameraY - VIEW_HEIGHT), rescue);
 }
 
+/**
+ * Jetpack flight: straight up at a fixed speed, steerable, no platforms, no jumping or shooting,
+ * invulnerable. When it ends the player gets a normal jump and a moment of invulnerability.
+ */
+function fly(state: GameState, input: Input, dt: number) {
+  const player = state.player;
+  steer(player, Number(input.right) - Number(input.left), dt);
+  wrap(player);
+  player.vy = -JETPACK_SPEED;
+  player.y += player.vy * dt;
+  const before = state.jetpack;
+  state.jetpack = Math.max(0, state.jetpack - dt);
+  if (before > JETPACK_SPUTTER && state.jetpack <= JETPACK_SPUTTER) {
+    state.events.push({ type: 'jetpackSputter' });
+  }
+  if (state.jetpack === 0) {
+    player.vy = -JUMP_VELOCITY;
+    state.invulnerable = Math.max(state.invulnerable, JETPACK_LANDING_INVULNERABILITY);
+    state.events.push({ type: 'jetpackEnd' });
+  }
+}
+
 /** Sinking slowly on the parachute; steerable, but no jumping and no shooting. */
 function floatDown(state: GameState, input: Input, dt: number) {
   const player = state.player;
@@ -707,7 +757,8 @@ function moveMonsters(state: GameState, previousPlayerY: number, dt: number) {
       monster.announced = true;
       state.events.push({ type: 'monsterNear', kind: monster.kind });
     }
-    if (player.hit || state.parachute || !overlaps(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT, monster.x, monster.y, MONSTER_WIDTH, MONSTER_HEIGHT, 6)) {
+    // On the jetpack the player flies through monsters.
+    if (player.hit || state.parachute || state.jetpack > 0 || !overlaps(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT, monster.x, monster.y, MONSTER_WIDTH, MONSTER_HEIGHT, 6)) {
       continue;
     }
     if (player.vy > 0 && previousPlayerY + PLAYER_HEIGHT <= monster.y + MONSTER_HEIGHT / 2) {
@@ -778,6 +829,7 @@ function moveEnemyBullets(state: GameState, dt: number) {
     const hits =
       !player.hit &&
       !state.parachute &&
+      state.jetpack === 0 &&
       state.invulnerable === 0 &&
       overlaps(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT, bullet.x, bullet.y, ENEMY_BULLET_WIDTH, ENEMY_BULLET_HEIGHT, 4);
     if (hits) {
@@ -1003,6 +1055,9 @@ function maybeAddPowerUp(state: GameState, platform: Platform) {
     const type = POWER_UPS[kind];
     if (height < type.minHeight || Math.abs(state.lastPowerUpY[kind] - platform.y) < type.minDistance) {
       continue;
+    }
+    if (kind === 'jetpack' && state.parachute) {
+      continue; // not on the way back up from the rescue platform
     }
     if (state.random() < type.chance(state)) {
       const powerUp: PowerUp = {

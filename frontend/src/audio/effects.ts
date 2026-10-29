@@ -70,6 +70,18 @@ export const EFFECTS = {
     { wave: 'square', freq: n('B6'), duration: 0.05, volume: 0.22, envelope: 'hold', duty: 0.25 },
     { wave: 'square', freq: n('E7'), duration: 0.25, volume: 0.2, duty: 0.25 },
   ],
+  jetpackIgnite: [{ wave: 'noise', freq: 5000, to: 900, duration: 0.3, volume: 0.45 }],
+  /** Engine noise for the whole flight; stopped when the jetpack falls off. */
+  jetpackLoop: [{ wave: 'noise', freq: 700, duration: 3.2, volume: 0.15, envelope: 'hold' }],
+  jetpackSputter: [
+    { wave: 'noise', freq: 400, duration: 0.1, volume: 0.4 },
+    { wave: 'noise', freq: 350, duration: 0.12, volume: 0.4, at: 0.25 },
+  ],
+  /** The empty jetpack falls off. */
+  jetpackOff: [
+    { wave: 'square', freq: 320, to: 120, duration: 0.08, volume: 0.3 },
+    { wave: 'triangle', freq: 90, duration: 0.15, volume: 0.5 },
+  ],
   /** The imps announce themselves before they come into view. */
   rustle: Array.from({ length: 4 }, (_, i): Tone => ({ wave: 'noise', freq: 5000 - i * 600, duration: 0.07, volume: 0.25, at: i * 0.09 })),
   tick: Array.from({ length: 4 }, (_, i): Tone => ({ wave: 'square', freq: i % 2 ? 1800 : 1500, duration: 0.02, volume: 0.25, at: i * 0.18 })),

@@ -1,4 +1,4 @@
-import { heightOf, MAX_LIVES, type GameState } from './engine';
+import { heightOf, JETPACK_DURATION, MAX_LIVES, type GameState } from './engine';
 import { PALETTE } from './palette';
 import { formatScore, hiScore, nextTarget } from './scoreboard';
 import type { Sprites } from './sprites';
@@ -247,6 +247,18 @@ function drawHearts(ctx: CanvasRenderingContext2D, hud: Hud, state: GameState, s
     ctx.scale(pulse, pulse);
     sprites.draw(ctx, filled ? 'heart' : 'heart-empty', -HEART_SIZE / 2, -HEART_SIZE / 2, scale * pulse);
     ctx.restore();
+  }
+  // Time left on the jetpack, as a bar under the hearts.
+  if (state.jetpack > 0) {
+    const { x } = heartPosition(0);
+    const width = MAX_LIVES * HEART_SPACING - (HEART_SPACING - HEART_SIZE);
+    ctx.fillStyle = PALETTE.black;
+    ctx.fillRect(x, 38, width, 6);
+    ctx.fillStyle = PALETTE.orange;
+    ctx.fillRect(x, 38, width * (state.jetpack / JETPACK_DURATION), 6);
+    ctx.strokeStyle = PALETTE.white;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, 38, width, 6);
   }
   ctx.fillStyle = PALETTE.red;
   for (const particle of hud.particles) {
