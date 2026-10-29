@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import {
   BULLET_SPEED,
+  HEART_BONUS,
+  HURT_INVULNERABILITY,
+  LANDING_INVULNERABILITY,
+  MAX_LIVES,
+  PARACHUTE_DROP,
+  POWER_UP_SIZE,
   createGame,
   createInput,
   JUMP_VELOCITY,
@@ -90,8 +96,9 @@ describe('engine', () => {
     expect(takeoffs).toBeGreaterThanOrEqual(2);
   });
 
-  it('is game over after falling below the screen', () => {
+  it('is game over after falling below the screen with the last heart', () => {
     const state = emptyGame();
+    state.lives = 1;
     const input = createInput();
     input.right = true; // walk off the start platform
     run(state, input, 3);
@@ -110,12 +117,13 @@ describe('engine', () => {
     const state = emptyGame();
     const start = state.platforms[0];
     start.kind = 'breaking';
+    const startY = start.y;
     state.player.standingOn = null;
     state.player.y = start.y - PLAYER_HEIGHT - 20;
     run(state, createInput(), 0.5);
     expect(start.broken).toBe(true);
     expect(state.player.standingOn).toBeNull();
-    expect(state.player.y).toBeGreaterThan(start.y);
+    expect(state.player.y).toBeGreaterThan(startY);
   });
 
   it('shoots monsters with F', () => {
@@ -132,8 +140,9 @@ describe('engine', () => {
     expect(state.score).toBe(50);
   });
 
-  it('touching a monster from below ends the run', () => {
+  it('touching a monster from below with the last heart ends the run', () => {
     const state = emptyGame();
+    state.lives = 1;
     const p = state.player;
     state.monsters.push({ id: 999, x: p.x, y: p.y - MONSTER_HEIGHT + 20, baseX: p.x, phase: 0 });
     state.time = 0;
@@ -161,5 +170,167 @@ describe('engine', () => {
       expect(platform.x).toBeGreaterThanOrEqual(0);
       expect(platform.x).toBeLessThanOrEqual(WORLD_WIDTH - PLATFORM_WIDTH);
     }
+  });
+
+  describe('lives', () => {
+    /** A monster sitting still right next to the standing player. */
+    function monsterBeside(state: GameState) {
+      const p = state.player;
+      state.monsters.push({ id: 999, x: p.x + 20, y: p.y, baseX: p.x + 20, phase: 0 });
+      state.time = 0; // sin(time * 2 + phase) = 0: the monster stays at baseX for a moment
+    }
+
+    it('starts with three hearts', () => {
+      expect(createGame(seeded(1)).lives).toBe(MAX_LIVES);
+    });
+
+    it('touching a monster costs one heart, knocks back and makes invulnerable', () => {
+      const state = emptyGame();
+      monsterBeside(state);
+      update(state, createInput(), DT);
+      expect(state.lives).toBe(MAX_LIVES - 1);
+      expect(state.player.hit).toBe(false);
+      expect(state.player.vx).toBeLessThan(0);
+      expect(state.invulnerable).toBeCloseTo(HURT_INVULNERABILITY);
+      expect(state.monsters).toHaveLength(1);
+      expect(state.events).toContainEqual({ type: 'hurt', cause: 'monster' });
+    });
+
+    it('cannot be hurt while invulnerable', () => {
+      const state = emptyGame();
+      monsterBeside(state);
+      state.invulnerable = 1;
+      update(state, createInput(), DT);
+      expect(state.lives).toBe(MAX_LIVES);
+    });
+
+    it('falling opens the parachute and lands on a rescue platform', () => {
+      const state = emptyGame();
+      const input = createInput();
+      input.right = true; // walk off the start platform
+      const oldBottom = state.cameraY + VIEW_HEIGHT;
+      for (let i = 0; i < 600 && !state.parachute; i++) {
+        update(state, input, DT);
+      }
+      expect(state.parachute).toBe(true);
+      expect(state.lives).toBe(MAX_LIVES - 1);
+      expect(state.over).toBe(false);
+      const rescue = state.platforms.find((p) => p.kind === 'rescue')!;
+      expect(rescue.y).toBe(oldBottom + PARACHUTE_DROP);
+
+      let seconds = 0;
+      while (state.parachute && seconds < 10) {
+        update(state, input, DT);
+        seconds += DT;
+      }
+      expect(state.parachute).toBe(false);
+      expect(seconds).toBeGreaterThan(2);
+      expect(seconds).toBeLessThan(3.5);
+      expect(state.player.standingOn).toBe(rescue.id);
+      expect(state.invulnerable).toBeCloseTo(LANDING_INVULNERABILITY, 1);
+      expect(state.cameraY).toBeGreaterThan(0); // the camera followed down
+      expect(state.score).toBe(0); // points are kept, the fall costs none
+    });
+
+    it('builds a climbable way back up from the rescue platform, without monsters', () => {
+      const state = createGame(seeded(7));
+      for (let i = 0; i < 200; i++) {
+        state.player.standingOn = null;
+        state.player.y = state.cameraY + VIEW_HEIGHT * 0.3;
+        state.player.vy = -JUMP_VELOCITY;
+        update(state, createInput(), DT);
+      }
+      state.monsters = [];
+      state.player.y = state.cameraY + VIEW_HEIGHT + 1; // just fell off
+      state.player.vy = 500;
+      update(state, createInput(), DT);
+      expect(state.parachute).toBe(true);
+      const rescue = state.platforms.find((p) => p.kind === 'rescue')!;
+      run(state, createInput(), 4); // land and stand there
+      expect(state.parachute).toBe(false);
+      expect(state.player.standingOn).toBe(rescue.id);
+      const supporting = state.platforms
+        .filter((p) => p.kind !== 'breaking' && p.y <= rescue.y)
+        .map((p) => p.y)
+        .sort((a, b) => a - b);
+      for (let i = 1; i < supporting.length; i++) {
+        expect(supporting[i] - supporting[i - 1]).toBeLessThanOrEqual(MAX_GAP);
+      }
+      expect(state.monsters).toHaveLength(0);
+    });
+
+    it('keeps the points after a fall', () => {
+      const state = emptyGame();
+      state.maxHeight = 2000;
+      state.player.standingOn = null;
+      state.player.y = state.cameraY + VIEW_HEIGHT + 1;
+      update(state, createInput(), DT);
+      expect(state.parachute).toBe(true);
+      expect(state.score).toBe(200);
+    });
+
+    it('collects a heart: one heart more, at full lives points instead', () => {
+      const state = emptyGame();
+      const p = state.player;
+      state.lives = 1;
+      state.powerUps.push({ id: 900, kind: 'heart', x: p.x, y: p.y });
+      update(state, createInput(), DT);
+      expect(state.lives).toBe(2);
+      expect(state.powerUps).toHaveLength(0);
+
+      state.lives = MAX_LIVES;
+      state.powerUps.push({ id: 901, kind: 'heart', x: p.x, y: p.y });
+      update(state, createInput(), DT);
+      expect(state.lives).toBe(MAX_LIVES);
+      expect(state.bonus).toBe(HEART_BONUS);
+      expect(state.score).toBe(HEART_BONUS);
+    });
+
+    it('spawns hearts above chain platforms, at least 80 m apart, more often when hearts are missing', () => {
+      const count = (lives: number) => {
+        const state = createGame(seeded(3));
+        state.lives = lives;
+        const hearts = new Set<number>();
+        const ys: number[] = [];
+        for (let i = 0; i < 1500; i++) {
+          state.lives = lives;
+          state.player.standingOn = null;
+          state.player.hit = false;
+          state.invulnerable = 10;
+          state.player.y = state.cameraY + VIEW_HEIGHT * 0.3;
+          state.player.vy = -JUMP_VELOCITY * 2;
+          update(state, createInput(), DT);
+          for (const h of state.powerUps) {
+            if (!hearts.has(h.id)) {
+              hearts.add(h.id);
+              ys.push(h.y);
+            }
+          }
+          state.powerUps = []; // never collected
+        }
+        ys.sort((a, b) => a - b);
+        for (let i = 1; i < ys.length; i++) {
+          expect(ys[i] - ys[i - 1]).toBeGreaterThanOrEqual(800);
+        }
+        return ys.length;
+      };
+      expect(count(1)).toBeGreaterThan(count(3));
+    });
+
+    it('a heart floats reachable above its platform', () => {
+      const state = createGame(seeded(11));
+      state.lives = 1;
+      for (let i = 0; i < 2000 && state.powerUps.length === 0; i++) {
+        state.player.standingOn = null;
+        state.player.y = state.cameraY + VIEW_HEIGHT * 0.3;
+        state.player.vy = -JUMP_VELOCITY;
+        update(state, createInput(), DT);
+      }
+      const heart = state.powerUps[0];
+      const below = state.platforms.find(
+        (p) => p.x <= heart.x && heart.x + POWER_UP_SIZE <= p.x + p.width && p.y > heart.y && p.y - heart.y < 100,
+      );
+      expect(below).toBeDefined();
+    });
   });
 });

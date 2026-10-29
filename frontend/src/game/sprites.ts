@@ -28,7 +28,11 @@ export const SPRITES = {
   'platform-normal': platform('normal'),
   'platform-moving': platform('moving'),
   'platform-breaking': platform('breaking'),
+  'platform-rescue': { file: 'platform-rescue.svg', x: 0, y: 0, width: 140, height: 14 },
   spring: { file: 'spring.svg', x: 0, y: 0, width: 16, height: 12 },
+  parachute: { file: 'parachute.svg', x: -32, y: -50, width: 64, height: 56 },
+  heart: { file: 'heart.svg', x: 0, y: 0, width: 24, height: 24 },
+  'heart-empty': { file: 'heart-empty.svg', x: 0, y: 0, width: 24, height: 24 },
   'imp-telefon': { file: 'imp-telefon.svg', x: -6, y: -12, width: 62, height: 56 },
   /** The IMP logo on every imp's shirt, centred on the anchor point. */
   'imp-logo': { file: 'imp-logo-shirt.svg', x: -7, y: -3.5, width: 14, height: 7 },
