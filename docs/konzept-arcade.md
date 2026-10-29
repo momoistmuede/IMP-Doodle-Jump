@@ -70,7 +70,7 @@ Bildschirmauflösung gezeichnet, mit Kantenglättung und ohne sichtbare Pixel.
   Fenstergröße, wird neu gerastert. Gebraucht werden:
   - Spieler: stehen, springen, schießen, fallen, am Fallschirm, Todesanimation
   - alle Plattformtypen inkl. Stachelplattform (4.4), Feder
-  - jeder Monstertyp mit Animation, Geschosse
+  - jeder Imp mit Animation (4.3), Geschosse; das IMP-Logo für die T-Shirts kommt als eigene Ebene dazu
   - Power-ups: Herz (auch fürs HUD), Punkte-Power-up mit einem Motiv je Zone (5.3), Raketenrucksack mit
     Flamme (5.4)
   - Fallschirm
@@ -462,23 +462,23 @@ Auswirkungen auf die Engine:
 ## 4. Zonen: Höhe macht das Spiel schwerer
 
 Alle 1000 Höhenmeter beginnt eine neue Zone. Die Zonen sind nach den Abteilungen benannt: Man steigt von der
-Hotline ganz unten bis in den Chefsessel auf. Jede Zone hat einen eigenen Hintergrund, eigene Musik und ein
-eigenes Aussehen für die Monster. Die Zonen 1–4 bringen außerdem neue Plattformtypen und neues
-Monster-Verhalten, ab Zone 5 kommen Stachelplattformen dazu. Innerhalb einer Zone steigt die Schwierigkeit weiter an, beim Zonenwechsel gibt es einen
-deutlichen Sprung.
+Hotline ganz unten bis in den Chefsessel auf. Jede Zone hat einen eigenen Hintergrund, eigene Musik und eigene
+Imps als Monster (4.3). Die Zonen 1–4 bringen außerdem neue Plattformtypen und neues Monster-Verhalten, ab
+Zone 5 kommen Stachelplattformen dazu. Innerhalb einer Zone steigt die Schwierigkeit weiter an, beim
+Zonenwechsel gibt es einen deutlichen Sprung.
 
 ### 4.1 Zonenübersicht
 
 | # | Name | Höhe | Hintergrund (Ziel, später) | Neue Plattformen | Monster (Aussehen · Verhalten) | Musik |
 |---|---|---|---|---|---|---|
-| 1 | Hotline | 0–1000 m | Großraumbüro mit Headsets, Post-its und Notizblock-Raster | normal, bewegt, brechend, Feder | **Klingelndes Telefon** · wackelt auf der Stelle (der heutige Blob), ab 150 m, selten | Warteschleifen-Melodie, fröhlich, 120 BPM |
-| 2 | Professional Service | 1000–2000 m | Unterwegs zum Kunden: Autobahn, Bahnhof, Kundenbüro, mit Parallaxe | **verschwindend** (trägt nur einmal) | Telefon, **Papierflieger mit Änderungswunsch** · fliegt quer durchs Bild | Reisetempo, 130 BPM |
-| 3 | Projektmanagement | 2000–3000 m | Whiteboards, Gantt-Diagramme, Kanban-Wand | **zerbröselnd** (bricht 1 s nach Landung), **vertikal bewegt** | Papierflieger, **Deadline-Uhr** · folgt dem Spieler langsam, 2 Treffer | Treibend, Moll, 140 BPM |
-| 4 | Development | 3000–4000 m | Dunkler Editor, scrollender Code, blinkender Terminal-Cursor | **kurze** Plattformen (48 px), schneller bewegt | Deadline-Uhr, **Bug** (Käfer) · schießt Exceptions nach unten | Synth, 145 BPM |
-| 5 | Operations | 4000–5000 m | Rechenzentrum: Serverracks, blinkende LEDs, Kabelstränge | Mix aller Typen, **Stachelplattform** (−1 Herz bei Landung) | Alle vier Verhalten im Operations-Look, z. B. **Alarm-Pager** statt Telefon | Pulsierend, 150 BPM |
-| 6 | Vertrieb | 5000–6000 m | Messestand, Umsatzkurven, Pokalvitrine | Mix aller Typen inkl. Stacheln | Alle vier im Vertriebs-Look, z. B. **Quartalsziel** statt Deadline-Uhr | Upbeat, 155 BPM |
-| 7 | Produktmanagement | 6000–7000 m | Roadmap-Wand, Post-it-Cluster, Persona-Steckbriefe | Mix aller Typen inkl. Stacheln | Alle vier im Produkt-Look, z. B. **Feature-Request** statt Papierflieger | Hektisch, 160 BPM |
-| 8 | Chefsessel | ab 7000 m (endlos) | Vorstandsetage über der Skyline, Holz und Gold. Im Hintergrund schwebt der Ledersessel, immer knapp außer Reichweite | Mix aller Typen inkl. Stacheln, dichter | Alle vier im Chef-Look, dichter | Triumphal, 165 BPM |
+| 1 | Hotline | 0–1000 m | Großraumbüro mit Headsets, Post-its und Notizblock-Raster | normal, bewegt, brechend, Feder | **Telefon-Imp** (schwingt einen klingelnden Hörer) · wackelt auf der Stelle (wie der heutige Blob), ab 150 m, selten | Warteschleifen-Melodie, fröhlich, 120 BPM |
+| 2 | Professional Service | 1000–2000 m | Unterwegs zum Kunden: Autobahn, Bahnhof, Kundenbüro, mit Parallaxe | **verschwindend** (trägt nur einmal) | Telefon-Imp, **Flieger-Imp** (reitet einen Papierflieger mit Änderungswunsch) · fliegt quer durchs Bild | Reisetempo, 130 BPM |
+| 3 | Projektmanagement | 2000–3000 m | Whiteboards, Gantt-Diagramme, Kanban-Wand | **zerbröselnd** (bricht 1 s nach Landung), **vertikal bewegt** | Flieger-Imp, **Deadline-Imp** (hält eine tickende Uhr hoch) · folgt dem Spieler langsam, 2 Treffer | Treibend, Moll, 140 BPM |
+| 4 | Development | 3000–4000 m | Dunkler Editor, scrollender Code, blinkender Terminal-Cursor | **kurze** Plattformen (48 px), schneller bewegt | Deadline-Imp, **Bug-Imp** (Käferflügel und Fühler) · wirft Exceptions nach unten | Synth, 145 BPM |
+| 5 | Operations | 4000–5000 m | Rechenzentrum: Serverracks, blinkende LEDs, Kabelstränge | Mix aller Typen, **Stachelplattform** (−1 Herz bei Landung) | Alle vier Verhalten als Operations-Imps, z. B. **Pager-Imp** statt Telefon-Imp | Pulsierend, 150 BPM |
+| 6 | Vertrieb | 5000–6000 m | Messestand, Umsatzkurven, Pokalvitrine | Mix aller Typen inkl. Stacheln | Alle vier als Vertriebs-Imps, z. B. **Quartalsziel-Imp** statt Deadline-Imp | Upbeat, 155 BPM |
+| 7 | Produktmanagement | 6000–7000 m | Roadmap-Wand, Post-it-Cluster, Persona-Steckbriefe | Mix aller Typen inkl. Stacheln | Alle vier als Produkt-Imps, z. B. **Feature-Request-Imp** statt Flieger-Imp | Hektisch, 160 BPM |
+| 8 | Chefsessel | ab 7000 m (endlos) | Vorstandsetage über der Skyline, Holz und Gold. Im Hintergrund schwebt der Ledersessel, immer knapp außer Reichweite | Mix aller Typen inkl. Stacheln, dichter | Alle vier als Chef-Imps mit goldenen Hörnern, dichter | Triumphal, 165 BPM |
 
 Die Zonen 5–8 bringen außer den Stachelplattformen (4.4) keine neue Spielmechanik, sondern ein neues
 Aussehen. Schwerer werden sie über die Werte in 4.2.
@@ -546,13 +546,46 @@ reine Köder. Verschwindende
 und zerbröselnde Plattformen dürfen Teil der Kette sein, weil sie einmal tragen. Die bestehenden
 Erreichbarkeits-Tests in `engine.test.ts` werden pro Zone und an der Obergrenze ausgeführt.
 
-### 4.3 Monster-Modell
+### 4.3 Monster: Imps
+
+Alle Monster sind **Imps**: kleine Fabelwesen, eine Art Kobold mit Hörnchen, spitzen Ohren und dünnem
+Schwanz. Es gibt verschiedene Imps, je nach Zone und Verhalten (Tabelle in 4.1). Eines haben alle gemeinsam:
+**Jeder Imp trägt dasselbe T-Shirt mit dem IMP-Logo auf der Brust.**
+
+Aussehen:
+
+- **Was sich unterscheidet:** Körperfarbe, Gesicht und Requisite. Die Requisite zeigt die Zone (Hörer,
+  Papierflieger, Uhr, Pager …), die Form zeigt das Verhalten. Flieger haben z. B. Flügel oder sitzen auf
+  etwas, Schützen werfen mit etwas.
+- **Was gleich bleibt:** das T-Shirt. Es ist bei allen Imps weiß (`#ffffff`, beim Festlegen der Palette die
+  hellste Palettenfarbe), damit das Logo auf jedem Imp und jedem Hintergrund gut zu erkennen ist. Requisiten
+  verdecken die Brust nicht, und Imps schauen immer nach vorn.
+- **Abgrenzung zur Spielfigur:** Auch die Spielfigur trägt ein T-Shirt (2.4), aber ohne Logo, und sie hat
+  Tentakel statt Hörnern und Schwanz. So verwechselt man sie auch bei weißem Spieler-T-Shirt nicht mit
+  einem Imp.
+
+Umsetzung des Logos:
+
+- Quelle ist die vorhandene Datei `frontend/public/imp-logo.png` (600 × 270), die `Logo.tsx` schon
+  verwendet. Es gibt sie nur einmal. Ändert sich das Logo, tragen alle Imps automatisch das neue.
+- Das Logo ist nicht in die Imp-Sprites eingezeichnet, sondern eine eigene Ebene. Für jede Pose eines
+  Imp-Sprites legt die Sprite-Tabelle einen Ankerpunkt und eine Breite für die Brust fest (etwa 16
+  Weltpixel). `drawMonster` zeichnet erst den Imp, dann das Logo an diesem Punkt. Das ist dasselbe Prinzip
+  wie bei Hut und Brille der Spielfigur (2.4).
+- Das Logo wird wie die Sprites einmal pro Canvas-Größe in Zielauflösung vorberechnet, mit
+  `imageSmoothingQuality = 'high'`, damit es beim starken Verkleinern sauber bleibt.
+- Ist das Logo in dieser Größe nicht mehr lesbar, bekommt es eine vereinfachte Fassung nur für das Shirt
+  (`public/sprites/imp-logo-shirt.svg`, z. B. nur der Schriftzug). Das wird beim ersten Sprite geprüft.
+- **Platzhalter**, bis die Imp-Sprites fertig sind: die heutige Blob-Form in einer Farbe je Verhalten, mit
+  einem weißen Rechteck als T-Shirt und dem echten Logo darauf. Das Logo ist so von Anfang an zu sehen.
+
+Modell:
 
 `Monster` bekommt die Felder `kind` für das Verhalten (`'wobbler' | 'flyer' | 'chaser' | 'shooter'`),
 `skin` für das Aussehen und `hp`. Das Verhalten bestimmt Bewegungsfunktion, Größe und Bonus. Das Aussehen
 hängt von der Zone ab, in der das Monster erzeugt wird (Eintrag in `ZONES`). Damit brauchen die Zonen 5–8
 nur neue Sprites und keinen neuen Code. Schüsse ziehen 1 HP ab, ein Sprung von oben tötet immer, das ist
-die Arcade-Belohnung für Mut. Die Geschosse des Schützen (im Development der Bug mit seinen Exceptions)
+die Arcade-Belohnung für Mut. Die Geschosse des Schützen (im Development der Bug-Imp mit seinen Exceptions)
 werden als eigene Liste `enemyBullets` geführt.
 
 ### 4.4 Stachelplattformen
@@ -728,7 +761,7 @@ eigenen, kurzen 8-Bit-Retro-Effekt, dazu ein Chiptune-Loop pro Zone (Klangvorgab
 | Letztes Herz | Warnpiep, dreimal direkt nach dem Verlust | Danach nur noch das pulsierende Herz |
 | Platz überholt (`NEXT` springt weiter) | kurzes „Ding-Ding“ | |
 | Monster taucht auf | eigenes Geräusch je Typ, z. B. Telefonklingeln, Papierrascheln, Ticken, Summen | Warnt, bevor das Monster im Bild ist |
-| Bug schießt eine Exception | „Zapp“ | |
+| Bug-Imp wirft eine Exception | „Zapp“ | |
 | Zonenwechsel | Fanfare (1–2 s) | |
 | Tod / Game Over | absteigende Melodie | Musik bricht vorher ab |
 | Neuer Highscore | Jubel-Jingle | Auf dem Game-Over-Screen |
@@ -768,7 +801,7 @@ Jede Etappe ist für sich spielbar und kann einzeln gemergt werden.
 
 | # | Inhalt | Wichtigste Dateien |
 |---|---|---|
-| 1 | Name imp@jump mit Untertitel, Rendering in zwei Ebenen (Pixel-Hintergrund im Offscreen-Canvas, scharfe SVG-Sprites für Spieler, Plattformen, Telefon), Palette, Arcade-HUD (Score mittig, `HI`/`NEXT`, Höhenmeter), Arcade-Schrift, Highscore-Liste in `App.tsx`, Scoreboard mit 10 festen Plätzen, Game-Over im Arcade-Stil | `index.html`, `App.tsx`, `render.ts`, `GameScreen.tsx`, `HighscoreScreen.tsx`, `GameOverScreen.tsx`, `theme.ts`, neu `public/sprites/` |
+| 1 | Name imp@jump mit Untertitel, Rendering in zwei Ebenen (Pixel-Hintergrund im Offscreen-Canvas, scharfe SVG-Sprites für Spieler, Plattformen, Telefon-Imp mit Logo-Shirt), Palette, Arcade-HUD (Score mittig, `HI`/`NEXT`, Höhenmeter), Arcade-Schrift, Highscore-Liste in `App.tsx`, Scoreboard mit 10 festen Plätzen, Game-Over im Arcade-Stil | `index.html`, `App.tsx`, `render.ts`, `GameScreen.tsx`, `HighscoreScreen.tsx`, `GameOverScreen.tsx`, `theme.ts`, neu `public/sprites/` |
 | 2 | 3 Leben, Unverwundbarkeit, Fallschirm, Herz-Power-up, Herzen im HUD | `engine.ts`, `engine.test.ts`, `render.ts` |
 | 3 | Ereignis-System und alle Soundeffekte, Stummschalten | `engine.ts`, neu `audio/sound.ts`, `GameScreen.tsx`, `public/sounds/` |
 | 4 | Zonen: Tabelle `ZONES` inkl. Obergrenze, Platzhalterfarben als Hintergrund, Musik, Banner; Intro-Abstieg durch alle Zonen (3.4); Punkte-Power-up mit Platzhalter je Zone (5.3) | `engine.ts`, `engine.test.ts`, `render.ts`, `audio/sound.ts`, `public/music/` |
@@ -806,6 +839,7 @@ Zu jeder Etappe gehören: Engine-Tests (vitest) für die neue Logik, Aktualisier
 | Figuren in der Bestenliste? | Ja, Mini-Figur im Skin des Spielers vor jedem Namen | 2.1 |
 | Wo wird der Skin gespeichert? | In der Datenbank pro Spielername, beim nächsten Start vorausgewählt | 2.5 |
 | Welche Power-ups gibt es? | Herz, Punkte (+200, Motiv je Zone, zunächst Platzhalter) und Raketenrucksack (3 s Flug) | 5 |
+| Wie sehen die Monster aus? | Verschiedene Imps (Fabelwesen) je Zone und Verhalten, alle im gleichen weißen T-Shirt mit IMP-Logo | 4.3 |
 | Gibt es Hindernisse außer Monstern? | Ja, Stachelplattformen ab Zone 5: Landung kostet ein Herz | 4.4 |
 
 ## 9. Spätere Erweiterungen (nicht Teil dieses Konzepts)

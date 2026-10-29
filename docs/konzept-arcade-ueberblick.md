@@ -168,14 +168,19 @@ Operations kommen Plattformen mit Stacheln dazu, die ein Herz kosten.
 
 | Zone | Ab Höhe | So sieht es aus | Neu hinzu kommt | Musik |
 |---|---|---|---|---|
-| 1 · Hotline | 0 m | Großraumbüro mit Headsets und Post-its | Die bekannten Plattformen und als erstes, seltenes Monster ein klingelndes Telefon | Fröhliche Warteschleifen-Melodie |
-| 2 · Professional Service | 1000 m | Unterwegs zum Kunden: Autobahn, Bahnhof, Kundenbüro | Plattformen, die nach einem Sprung verschwinden, und Papierflieger mit Änderungswünschen, die quer durchs Bild fliegen | Flottes Reisetempo |
-| 3 · Projektmanagement | 2000 m | Whiteboards, Zeitpläne, Kanban-Wand | Plattformen, die kurz nach der Landung zerbröseln, Plattformen, die auf und ab fahren, und Deadline-Uhren, die einem folgen | Treibend, etwas düster |
-| 4 · Development | 3000 m | Dunkler Bildschirm voller Programmcode | Kürzere, schnellere Plattformen und Bugs (Käfer), die von oben mit Fehlermeldungen schießen | Elektronisch |
-| 5 · Operations | 4000 m | Rechenzentrum mit Serverschränken und blinkenden Lämpchen | **Plattformen mit Stacheln**: Wer darauf landet, verliert ein Herz. Dazu alle bisherigen Gegner in neuem Look, z. B. ein Alarm-Pager statt des Telefons | Pulsierend |
-| 6 · Vertrieb | 5000 m | Messestand, Umsatzkurven, Pokale | Mehr Stacheln, Gegner im Vertriebs-Look, z. B. ein Quartalsziel statt der Deadline-Uhr | Schwungvoll |
-| 7 · Produktmanagement | 6000 m | Roadmap-Wand voller Post-its | Mehr Stacheln, Gegner im Produkt-Look, z. B. Feature-Requests statt Papierfliegern | Hektisch |
+| 1 · Hotline | 0 m | Großraumbüro mit Headsets und Post-its | Die bekannten Plattformen und als erstes, seltenes Monster ein Imp, der einen klingelnden Telefonhörer schwingt | Fröhliche Warteschleifen-Melodie |
+| 2 · Professional Service | 1000 m | Unterwegs zum Kunden: Autobahn, Bahnhof, Kundenbüro | Plattformen, die nach einem Sprung verschwinden, und Imps, die auf Papierfliegern mit Änderungswünschen quer durchs Bild fliegen | Flottes Reisetempo |
+| 3 · Projektmanagement | 2000 m | Whiteboards, Zeitpläne, Kanban-Wand | Plattformen, die kurz nach der Landung zerbröseln, Plattformen, die auf und ab fahren, und Imps mit tickenden Deadline-Uhren, die einem folgen | Treibend, etwas düster |
+| 4 · Development | 3000 m | Dunkler Bildschirm voller Programmcode | Kürzere, schnellere Plattformen und Bug-Imps mit Käferflügeln, die von oben mit Fehlermeldungen werfen | Elektronisch |
+| 5 · Operations | 4000 m | Rechenzentrum mit Serverschränken und blinkenden Lämpchen | **Plattformen mit Stacheln**: Wer darauf landet, verliert ein Herz. Dazu alle bisherigen Imps in neuem Look, z. B. mit Alarm-Pager statt Telefon | Pulsierend |
+| 6 · Vertrieb | 5000 m | Messestand, Umsatzkurven, Pokale | Mehr Stacheln, Imps im Vertriebs-Look, z. B. mit Quartalsziel statt Deadline-Uhr | Schwungvoll |
+| 7 · Produktmanagement | 6000 m | Roadmap-Wand voller Post-its | Mehr Stacheln, Imps im Produkt-Look, z. B. mit Feature-Requests statt Papierfliegern | Hektisch |
 | 8 · Chefsessel | 7000 m | Vorstandsetage über der Skyline. Im Hintergrund schwebt der Chefsessel, immer knapp außer Reichweite | Alles gemischt und dichter | Triumphal |
+
+**Die Gegner sind Imps:** kleine Fabelwesen, eine Art Kobold mit Hörnchen, spitzen Ohren und Schwanz. In
+jeder Zone sehen sie anders aus und haben andere Dinge dabei, passend zur Abteilung. Alle tragen aber
+dasselbe weiße T-Shirt mit dem IMP-Logo auf der Brust. Die eigene Spielfigur trägt ein T-Shirt ohne Logo
+und hat Tentakel statt Hörnern, so kann man sie nicht verwechseln.
 
 Die Zonen gehen weich ineinander über: Der Hintergrund wechselt allmählich und die Musik blendet über.
 
