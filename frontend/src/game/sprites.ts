@@ -29,6 +29,13 @@ export const SPRITES = {
   'platform-moving': platform('moving'),
   'platform-breaking': platform('breaking'),
   'platform-rescue': { file: 'platform-rescue.svg', x: 0, y: 0, width: 140, height: 14 },
+  'platform-vanishing': platform('vanishing'),
+  'platform-crumbling': platform('crumbling'),
+  'platform-vertical': platform('vertical'),
+  'platform-normal-short': { file: 'platform-normal-short.svg', x: 0, y: 0, width: 48, height: 14 },
+  'platform-moving-short': { file: 'platform-moving-short.svg', x: 0, y: 0, width: 48, height: 14 },
+  /** The spikes stick out 6 px above the platform's top. */
+  'platform-spiked': { file: 'platform-spiked.svg', x: 0, y: -6, width: 68, height: 20 },
   spring: { file: 'spring.svg', x: 0, y: 0, width: 16, height: 12 },
   parachute: { file: 'parachute.svg', x: -32, y: -50, width: 64, height: 56 },
   heart: { file: 'heart.svg', x: 0, y: 0, width: 24, height: 24 },
