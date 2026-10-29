@@ -11,15 +11,18 @@ gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md
    **Leertaste**, **Enter** oder **Play**
 2. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
    weiterspringen), **F** schießen
-3. Wer unten aus dem Bild fällt, ist **Game Over** und kann seinen Namen für die Highscores eintragen.
+3. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
+   unten aus dem Bild fällt, verliert ein Herz und schwebt am **Fallschirm** auf eine Rettungsplattform
+   30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100).
+4. Mit dem letzten Herz ist **Game Over**, dann kann man seinen Namen für die Highscores eintragen.
 
 Anzeige im Spiel: der Score groß oben mittig, darunter `HI` (Platz 1) und `NEXT` (der nächste Platz der Top 10,
 den man noch überholen kann). Am linken Rand zeigt der Höhenmeter den Fortschritt in der aktuellen Zone
 (10 px = 1 m, je 1000 m eine Zone).
 
 Plattformen: grün = normal, blau = bewegt sich, braun = bricht weg (trägt nicht), Feder = Super-Sprung.
-Ab 150 m tauchen Imps auf: abschießen oder von oben draufspringen; seitlich oder von unten berührt fällt
-man herunter. Punkte = Höhe in Metern + 50 pro Imp.
+Ab 150 m tauchen Imps auf: abschießen oder von oben draufspringen. Punkte = Höhe in Metern + 50 pro Imp
++ Bonuspunkte aus Fundstücken.
 
 ## Schnellstart: klonen und ausführen
 

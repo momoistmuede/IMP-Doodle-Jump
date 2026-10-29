@@ -1,6 +1,7 @@
-import { heightOf, type GameState } from './engine';
+import { heightOf, MAX_LIVES, type GameState } from './engine';
 import { PALETTE } from './palette';
 import { formatScore, hiScore, nextTarget } from './scoreboard';
+import type { Sprites } from './sprites';
 import { ZONE_HEIGHT_M, ZONE_NAMES, zoneIndexAt } from './zones';
 
 /**
@@ -17,6 +18,20 @@ const PULSE_SECONDS = 0.15;
 const NEXT_BLINK_SECONDS = 1;
 
 const METER = { x: 6, top: 112, bottom: 488, width: 8 };
+const HEART_SIZE = 24;
+const HEART_SPACING = 28;
+const FLASH_SECONDS = 0.3;
+const BURST_SECONDS = 0.6;
+/** The best-height marker appears once the player is this far below it, e.g. after a parachute fall. */
+const BEST_MARKER_DISTANCE = 300;
+
+interface Particle {
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  age: number;
+}
 
 interface Popup {
   text: string;
@@ -36,11 +51,15 @@ export interface Hud {
   nextRank: number | null | undefined;
   /** Seconds left of the NEXT blink after overtaking a place. */
   nextBlink: number;
+  /** Red flash after losing a heart. */
+  flash: number;
+  /** Pieces of the heart that just burst, in screen coordinates. */
+  particles: Particle[];
   time: number;
 }
 
 export function createHud(top: readonly number[]): Hud {
-  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, time: 0 };
+  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, flash: 0, particles: [], time: 0 };
 }
 
 /** Advances the animations and reacts to the events of the last `update`. */
@@ -52,11 +71,37 @@ export function updateHud(hud: Hud, state: GameState, dt: number) {
     popup.age += dt;
   }
   hud.popups = hud.popups.filter((p) => p.age < POPUP_SECONDS);
+  hud.flash = Math.max(0, hud.flash - dt);
+  for (const particle of hud.particles) {
+    particle.age += dt;
+    particle.vy += 600 * dt;
+    particle.x += particle.vx * dt;
+    particle.y += particle.vy * dt;
+  }
+  hud.particles = hud.particles.filter((p) => p.age < BURST_SECONDS);
 
   for (const event of state.events) {
-    if (event.type === 'kill') {
-      hud.popups.push({ text: `+${event.points}`, x: event.x, y: event.y, age: 0 });
-      hud.pulse = PULSE_SECONDS;
+    switch (event.type) {
+      case 'kill':
+      case 'heartBonus':
+        hud.popups.push({ text: `+${event.points}`, x: event.x, y: event.y, age: 0 });
+        hud.pulse = PULSE_SECONDS;
+        break;
+      case 'hurt': {
+        hud.flash = FLASH_SECONDS;
+        const heart = heartPosition(state.lives);
+        for (let i = 0; i < 12; i++) {
+          const angle = (i / 12) * Math.PI * 2;
+          hud.particles.push({
+            x: heart.x + HEART_SIZE / 2,
+            y: heart.y + HEART_SIZE / 2,
+            vx: Math.cos(angle) * (80 + Math.random() * 60),
+            vy: Math.sin(angle) * (80 + Math.random() * 60) - 120,
+            age: 0,
+          });
+        }
+        break;
+      }
     }
   }
 
@@ -77,9 +122,16 @@ export function drawPopups(ctx: CanvasRenderingContext2D, hud: Hud) {
 }
 
 /** Draws the HUD in screen coordinates (world pixels without the camera). */
-export function drawHud(ctx: CanvasRenderingContext2D, hud: Hud, state: GameState) {
+export function drawHud(ctx: CanvasRenderingContext2D, hud: Hud, state: GameState, sprites: Sprites, scale: number) {
   const blinkOn = Math.floor(hud.time * 8) % 2 === 0;
   const center = 200;
+
+  if (hud.flash > 0) {
+    ctx.globalAlpha = (hud.flash / FLASH_SECONDS) * 0.4;
+    ctx.fillStyle = PALETTE.red;
+    ctx.fillRect(0, 0, 400, 600);
+    ctx.globalAlpha = 1;
+  }
 
   ctx.save();
   ctx.translate(center, 28);
@@ -97,7 +149,33 @@ export function drawHud(ctx: CanvasRenderingContext2D, hud: Hud, state: GameStat
     text(ctx, line, center, 76, 16, next ? PALETTE.white : PALETTE.gold, 'center');
   }
 
+  drawHearts(ctx, hud, state, sprites, scale);
   drawMeter(ctx, state);
+}
+
+/** Top left corner of heart `index` (0 = leftmost) at the top right of the screen. */
+function heartPosition(index: number): { x: number; y: number } {
+  return { x: 400 - 8 - (MAX_LIVES - index) * HEART_SPACING + (HEART_SPACING - HEART_SIZE), y: 10 };
+}
+
+/** Filled hearts for the lives left, outlines for the lost ones; the last one pulses. */
+function drawHearts(ctx: CanvasRenderingContext2D, hud: Hud, state: GameState, sprites: Sprites, scale: number) {
+  for (let i = 0; i < MAX_LIVES; i++) {
+    const { x, y } = heartPosition(i);
+    const filled = i < state.lives;
+    const pulse = filled && state.lives === 1 ? 1 + 0.15 * Math.abs(Math.sin(hud.time * 6)) : 1;
+    ctx.save();
+    ctx.translate(x + HEART_SIZE / 2, y + HEART_SIZE / 2);
+    ctx.scale(pulse, pulse);
+    sprites.draw(ctx, filled ? 'heart' : 'heart-empty', -HEART_SIZE / 2, -HEART_SIZE / 2, scale * pulse);
+    ctx.restore();
+  }
+  ctx.fillStyle = PALETTE.red;
+  for (const particle of hud.particles) {
+    ctx.globalAlpha = 1 - particle.age / BURST_SECONDS;
+    ctx.fillRect(particle.x - 2, particle.y - 2, 4, 4);
+  }
+  ctx.globalAlpha = 1;
 }
 
 /** Height meter on the left: progress through the current zone (or 1000 m step in the endless last zone). */
@@ -134,6 +212,21 @@ function drawMeter(ctx: CanvasRenderingContext2D, state: GameState) {
   ctx.fill();
   ctx.stroke();
   text(ctx, `${Math.floor(meters)} m`, x + width + 10, markerY - 4, 8, PALETTE.white);
+
+  // Dashed: the highest point of this round, to be climbed again after a fall.
+  if (state.maxHeight - Math.max(0, heightOf(state)) > BEST_MARKER_DISTANCE) {
+    const best = state.maxHeight / PIXELS_PER_METER;
+    const bestY = Math.max(top, bottom - ((best - start) / ZONE_HEIGHT_M) * (bottom - top));
+    ctx.setLineDash([3, 2]);
+    ctx.strokeStyle = PALETTE.white;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(x - 2, bestY);
+    ctx.lineTo(x + width + 8, bestY);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    text(ctx, `${Math.floor(best)} m`, x + width + 10, bestY - 4, 8, PALETTE.yellow);
+  }
 }
 
 /** White (or coloured) arcade text with a dark outline, readable on every background. */

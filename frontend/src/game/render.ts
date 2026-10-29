@@ -2,14 +2,15 @@ import {
   BULLET_RADIUS,
   MONSTER_WIDTH,
   PLATFORM_HEIGHT,
-  PLATFORM_WIDTH,
   PLAYER_WIDTH,
+  POWER_UP_SIZE,
   VIEW_HEIGHT,
   WORLD_WIDTH,
   type GameState,
   type Monster,
   type Platform,
   type Player,
+  type PowerUp,
 } from './engine';
 import { drawHud, drawPopups, type Hud } from './hud';
 import { PALETTE } from './palette';
@@ -59,6 +60,9 @@ export class Renderer {
     for (const monster of state.monsters) {
       this.drawMonster(monster, state.time, scale);
     }
+    for (const powerUp of state.powerUps) {
+      this.drawPowerUp(powerUp, state.time, scale);
+    }
     ctx.fillStyle = PALETTE.redDark;
     ctx.strokeStyle = PALETTE.ink;
     ctx.lineWidth = 1.5;
@@ -68,16 +72,21 @@ export class Renderer {
       ctx.fill();
       ctx.stroke();
     }
-    this.drawPlayer(state.player, state.time, scale);
+    // Blinking while invulnerable.
+    if (state.invulnerable > 0 && Math.floor(state.time * 10) % 2 === 0) {
+      ctx.globalAlpha = 0.35;
+    }
+    this.drawPlayer(state.player, state, scale);
     // Wrapped around the edge: also draw the part that shows on the other side.
     if (state.player.x < 0 || state.player.x + PLAYER_WIDTH > WORLD_WIDTH) {
       const shift = state.player.x < 0 ? WORLD_WIDTH : -WORLD_WIDTH;
-      this.drawPlayer({ ...state.player, x: state.player.x + shift }, state.time, scale);
+      this.drawPlayer({ ...state.player, x: state.player.x + shift }, state, scale);
     }
+    ctx.globalAlpha = 1;
     drawPopups(ctx, hud);
 
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    drawHud(ctx, hud, state);
+    drawHud(ctx, hud, state, this.sprites, scale);
   }
 
   /** The hotline's notepad, in pixel art. Positions are whole art pixels, otherwise slow scrolling flickers. */
@@ -107,24 +116,35 @@ export class Renderer {
       const tilt = Math.min(0.6, platform.fallVelocity / 1500);
       for (const side of [-1, 1]) {
         ctx.save();
-        ctx.translate(platform.x + PLATFORM_WIDTH / 2 + side * 4, platform.y + PLATFORM_HEIGHT / 2);
+        ctx.translate(platform.x + platform.width / 2 + side * 4, platform.y + PLATFORM_HEIGHT / 2);
         ctx.rotate(side * tilt);
         ctx.beginPath();
-        ctx.rect(side < 0 ? -PLATFORM_WIDTH / 2 : 0, -PLATFORM_HEIGHT, PLATFORM_WIDTH / 2, PLATFORM_HEIGHT * 2);
+        ctx.rect(side < 0 ? -platform.width / 2 : 0, -PLATFORM_HEIGHT, platform.width / 2, PLATFORM_HEIGHT * 2);
         ctx.clip();
-        this.sprites.draw(ctx, sprite, -PLATFORM_WIDTH / 2, -PLATFORM_HEIGHT / 2, scale);
+        this.sprites.draw(ctx, sprite, -platform.width / 2, -PLATFORM_HEIGHT / 2, scale);
         ctx.restore();
       }
       return;
     }
     this.sprites.draw(ctx, sprite, platform.x, platform.y, scale);
     if (platform.spring) {
-      this.sprites.draw(ctx, 'spring', platform.x + PLATFORM_WIDTH / 2 - 8, platform.y - 11, scale);
+      this.sprites.draw(ctx, 'spring', platform.x + platform.width / 2 - 8, platform.y - 11, scale);
     }
   }
 
-  private drawPlayer(player: Player, time: number, scale: number) {
+  private drawPlayer(player: Player, state: GameState, scale: number) {
     const ctx = this.ctx;
+    const time = state.time;
+    if (state.parachute) {
+      // Swinging gently under the canopy.
+      ctx.save();
+      ctx.translate(player.x + PLAYER_WIDTH / 2, player.y);
+      ctx.rotate(Math.sin(time * 2) * 0.08);
+      this.sprites.draw(ctx, 'parachute', 0, 0, scale);
+      this.sprites.draw(ctx, 'player-stand', -PLAYER_WIDTH / 2, 0, scale);
+      ctx.restore();
+      return;
+    }
     const pose: SpriteName = player.hit
       ? 'player-dead'
       : player.shootPose > 0
@@ -144,6 +164,34 @@ export class Renderer {
     }
     this.sprites.draw(ctx, pose, -PLAYER_WIDTH / 2, 0, scale);
     ctx.restore();
+  }
+
+  /** Power-ups bob up and down and sparkle, so they stand out on dark backgrounds too. */
+  private drawPowerUp(powerUp: PowerUp, time: number, scale: number) {
+    const ctx = this.ctx;
+    const bob = Math.sin(time * 4 + powerUp.id) * 3;
+    this.sprites.draw(ctx, powerUp.kind, powerUp.x, powerUp.y + bob, scale);
+    ctx.fillStyle = PALETTE.white;
+    for (let i = 0; i < 3; i++) {
+      const t = time * 3 + i * 2.1 + powerUp.id;
+      const size = Math.max(0, Math.sin(t)) * 3;
+      if (size > 0.3) {
+        const sx = powerUp.x + POWER_UP_SIZE / 2 + Math.cos(i * 2.1) * 16;
+        const sy = powerUp.y + POWER_UP_SIZE / 2 + bob + Math.sin(i * 2.1) * 16;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - size * 2);
+        ctx.lineTo(sx + size / 2, sy);
+        ctx.lineTo(sx, sy + size * 2);
+        ctx.lineTo(sx - size / 2, sy);
+        ctx.closePath();
+        ctx.moveTo(sx - size * 2, sy);
+        ctx.lineTo(sx, sy + size / 2);
+        ctx.lineTo(sx + size * 2, sy);
+        ctx.lineTo(sx, sy - size / 2);
+        ctx.closePath();
+        ctx.fill();
+      }
+    }
   }
 
   private drawMonster(monster: Monster, time: number, scale: number) {
