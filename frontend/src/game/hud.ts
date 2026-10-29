@@ -55,15 +55,20 @@ export interface Hud {
   flash: number;
   /** Pieces of the heart that just burst, in screen coordinates. */
   particles: Particle[];
+  /** Sound switched off (key M): shown as a crossed-out speaker. */
+  muted: boolean;
   time: number;
 }
 
 export function createHud(top: readonly number[]): Hud {
-  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, flash: 0, particles: [], time: 0 };
+  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, flash: 0, particles: [], muted: false, time: 0 };
 }
 
-/** Advances the animations and reacts to the events of the last `update`. */
-export function updateHud(hud: Hud, state: GameState, dt: number) {
+/**
+ * Advances the animations and reacts to the events of the last `update`.
+ * Returns true when the player just overtook a place of the top 10.
+ */
+export function updateHud(hud: Hud, state: GameState, dt: number): boolean {
   hud.time += dt;
   hud.pulse = Math.max(0, hud.pulse - dt);
   hud.nextBlink = Math.max(0, hud.nextBlink - dt);
@@ -106,10 +111,12 @@ export function updateHud(hud: Hud, state: GameState, dt: number) {
   }
 
   const next = nextTarget(hud.top, state.score)?.rank ?? null;
-  if (hud.nextRank !== undefined && next !== hud.nextRank) {
+  const overtaken = hud.nextRank !== undefined && next !== hud.nextRank;
+  if (overtaken) {
     hud.nextBlink = NEXT_BLINK_SECONDS;
   }
   hud.nextRank = next;
+  return overtaken;
 }
 
 /** Popups live in the world; call with the camera transform applied. */
@@ -151,6 +158,42 @@ export function drawHud(ctx: CanvasRenderingContext2D, hud: Hud, state: GameStat
 
   drawHearts(ctx, hud, state, sprites, scale);
   drawMeter(ctx, state);
+  drawSpeaker(ctx, hud.muted);
+}
+
+/** Small speaker at the top left; crossed out while the sound is off. */
+function drawSpeaker(ctx: CanvasRenderingContext2D, muted: boolean) {
+  ctx.save();
+  ctx.translate(8, 10);
+  ctx.fillStyle = PALETTE.white;
+  ctx.strokeStyle = PALETTE.ink;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 5);
+  ctx.lineTo(4, 5);
+  ctx.lineTo(9, 1);
+  ctx.lineTo(9, 15);
+  ctx.lineTo(4, 11);
+  ctx.lineTo(0, 11);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = muted ? PALETTE.red : PALETTE.white;
+  ctx.beginPath();
+  if (muted) {
+    ctx.moveTo(12, 4);
+    ctx.lineTo(19, 12);
+    ctx.moveTo(19, 4);
+    ctx.lineTo(12, 12);
+  } else {
+    ctx.arc(10, 8, 4, -0.9, 0.9);
+    ctx.moveTo(15.5, 2.5);
+    ctx.arc(10, 8, 8, -0.75, 0.75);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** Top left corner of heart `index` (0 = leftmost) at the top right of the screen. */

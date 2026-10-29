@@ -7,6 +7,7 @@ const KEYS: [string, string][] = [
   ['← →', 'bewegen'],
   ['Leertaste', 'springen'],
   ['F', 'schießen'],
+  ['M', 'Ton an/aus'],
 ];
 
 /** Legend of the keyboard controls. */

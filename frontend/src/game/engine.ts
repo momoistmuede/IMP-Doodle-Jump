@@ -30,6 +30,8 @@ const MOVING_PLATFORM_SPEED = 90;
 export const MONSTER_WIDTH = 50;
 export const MONSTER_HEIGHT = 40;
 const MONSTER_START_HEIGHT = 1500;
+/** A monster this far above the screen announces itself with a sound. */
+const MONSTER_WARNING_DISTANCE = 150;
 
 export const BULLET_SPEED = 1000;
 export const BULLET_RADIUS = 5;
@@ -83,6 +85,8 @@ export interface Monster {
   y: number;
   baseX: number;
   phase: number;
+  /** The warning sound was played (the monster is about to appear). */
+  announced?: boolean;
 }
 
 export interface Bullet {
@@ -125,7 +129,13 @@ export interface Input {
 
 /** Something that happened during `update`, for the HUD and the sound; the caller empties `state.events`. */
 export type GameEvent =
-  | { type: 'kill'; x: number; y: number; points: number }
+  | { type: 'jump' }
+  | { type: 'spring' }
+  | { type: 'shoot' }
+  | { type: 'break' }
+  /** A monster is about to come into view. */
+  | { type: 'monsterNear' }
+  | { type: 'kill'; x: number; y: number; points: number; by: 'shot' | 'stomp' }
   | { type: 'hurt'; cause: 'monster' | 'fall' }
   | { type: 'death' }
   | { type: 'parachuteOpen' }
@@ -277,6 +287,7 @@ export function update(state: GameState, input: Input, dt: number): void {
     state.bullets.push({ id: state.nextId++, x: player.x + PLAYER_WIDTH / 2, y: player.y });
     state.fireCooldown = FIRE_COOLDOWN;
     player.shootPose = 0.2;
+    state.events.push({ type: 'shoot' });
   }
 
   const previousY = player.y;
@@ -363,6 +374,7 @@ function movePlayer(state: GameState, input: Input, dt: number) {
     } else if (input.jump && !player.hit) {
       player.standingOn = null;
       player.vy = -JUMP_VELOCITY;
+      state.events.push({ type: 'jump' });
     } else {
       player.y = platform.y - PLAYER_HEIGHT;
       player.vy = 0;
@@ -396,13 +408,16 @@ function movePlayer(state: GameState, input: Input, dt: number) {
   }
   if (landing.kind === 'breaking') {
     landing.broken = true; // no support: the player falls through
+    state.events.push({ type: 'break' });
     return;
   }
   player.y = landing.y - PLAYER_HEIGHT;
   if (landing.spring) {
     player.vy = -SPRING_VELOCITY;
+    state.events.push({ type: 'spring' });
   } else if (input.jump) {
     player.vy = -JUMP_VELOCITY;
+    state.events.push({ type: 'jump' });
   } else {
     player.vy = 0;
     player.standingOn = landing.id;
@@ -478,13 +493,17 @@ function moveMonsters(state: GameState, previousPlayerY: number) {
   const killed = new Set<number>();
   for (const monster of state.monsters) {
     monster.x = monster.baseX + Math.sin(state.time * 2 + monster.phase) * 30;
+    if (!monster.announced && monster.y + MONSTER_HEIGHT > state.cameraY - MONSTER_WARNING_DISTANCE) {
+      monster.announced = true;
+      state.events.push({ type: 'monsterNear' });
+    }
     if (player.hit || state.parachute || !overlaps(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT, monster.x, monster.y, MONSTER_WIDTH, MONSTER_HEIGHT, 6)) {
       continue;
     }
     if (player.vy > 0 && previousPlayerY + PLAYER_HEIGHT <= monster.y + MONSTER_HEIGHT / 2) {
       // Jumped on top of it.
       killed.add(monster.id);
-      killMonster(state, monster);
+      killMonster(state, monster, 'stomp');
       player.vy = -JUMP_VELOCITY;
       player.standingOn = null;
     } else if (state.invulnerable === 0) {
@@ -524,7 +543,7 @@ function moveBullets(state: GameState, dt: number) {
     );
     if (target) {
       state.monsters = state.monsters.filter((m) => m !== target);
-      killMonster(state, target);
+      killMonster(state, target, 'shot');
     } else if (bullet.y > state.cameraY - 50) {
       remaining.push(bullet);
     }
@@ -532,9 +551,9 @@ function moveBullets(state: GameState, dt: number) {
   state.bullets = remaining;
 }
 
-function killMonster(state: GameState, monster: Monster) {
+function killMonster(state: GameState, monster: Monster, by: 'shot' | 'stomp') {
   state.kills++;
-  state.events.push({ type: 'kill', x: monster.x + MONSTER_WIDTH / 2, y: monster.y, points: KILL_BONUS });
+  state.events.push({ type: 'kill', x: monster.x + MONSTER_WIDTH / 2, y: monster.y, points: KILL_BONUS, by });
 }
 
 function collectPowerUps(state: GameState) {
