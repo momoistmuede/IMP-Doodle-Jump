@@ -16,7 +16,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 public class FrontendConfig implements WebMvcConfigurer {
 
   /** Paths of the frontend, which get the Content-Security-Policy. */
-  public static final List<String> FRONTEND_PATHS = List.of("/", "/index.html", "/assets/**", "/icon.png", "/imp-logo.png");
+  public static final List<String> FRONTEND_PATHS = List.of("/", "/index.html", "/assets/**", "/icon.png", "/imp-logo.png", "/sprites/**");
 
   private static final String STATIC = "classpath:/static/";
 

@@ -1,9 +1,12 @@
 import Box from '@mui/material/Box';
-import Paper from '@mui/material/Paper';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef, useState } from 'react';
+import type { Highscore } from '../api';
 import { createGame, createInput, update, VIEW_HEIGHT, WORLD_WIDTH } from '../game/engine';
-import { render } from '../game/render';
+import { createHud, FONT_FAMILY, updateHud } from '../game/hud';
+import { Renderer } from '../game/render';
+import { Sprites } from '../game/sprites';
+import { PALETTE } from '../game/palette';
 
 /** Longest simulated step, so a stalled tab does not teleport the player. */
 const MAX_STEP = 1 / 30;
@@ -12,20 +15,37 @@ const GAME_OVER_DELAY_MS = 600;
 
 const CONTROL_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Space', 'KeyF']);
 
-export function GameScreen({ onGameOver }: { onGameOver: (score: number) => void }) {
+/** Font and sprites are loaded once; otherwise the first frame would show the fallback font. */
+let assets: Promise<Sprites> | undefined;
+function loadAssets(): Promise<Sprites> {
+  assets ??= Promise.all([document.fonts.load(`32px ${FONT_FAMILY}`), Sprites.load()]).then(([, sprites]) => sprites);
+  assets.catch(() => (assets = undefined)); // try again next round
+  return assets;
+}
+
+interface Props {
+  /** The top 10 for HI and NEXT in the HUD. */
+  highscores: Highscore[];
+  onGameOver: (score: number) => void;
+}
+
+export function GameScreen({ highscores, onGameOver }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const onGameOverRef = useRef(onGameOver);
   onGameOverRef.current = onGameOver;
-  const [score, setScore] = useState(0);
+  const topRef = useRef(highscores.map((h) => h.score));
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
     const state = createGame();
     const input = createInput();
+    const hud = createHud(topRef.current);
+    let renderer: Renderer | undefined;
     let frame = 0;
-    let last = performance.now();
-    let shownScore = 0;
+    let last = 0;
+    let stopped = false;
     let gameOverTimer: ReturnType<typeof setTimeout> | undefined;
 
     const setKey = (event: KeyboardEvent, down: boolean) => {
@@ -57,6 +77,8 @@ export function GameScreen({ onGameOver }: { onGameOver: (score: number) => void
       last = now;
       update(state, input, dt);
       input.fire = false;
+      updateHud(hud, state, dt);
+      state.events = [];
 
       // Canvas resolution follows its CSS size and the device pixel ratio.
       const width = Math.round(canvas.clientWidth * devicePixelRatio);
@@ -64,12 +86,8 @@ export function GameScreen({ onGameOver }: { onGameOver: (score: number) => void
         canvas.width = width;
         canvas.height = Math.round((width * VIEW_HEIGHT) / WORLD_WIDTH);
       }
-      render(ctx, state, canvas.width / WORLD_WIDTH);
+      renderer!.render(state, hud, canvas.width / WORLD_WIDTH);
 
-      if (state.score !== shownScore) {
-        shownScore = state.score;
-        setScore(shownScore);
-      }
       if (state.over) {
         gameOverTimer = setTimeout(() => onGameOverRef.current(state.score), GAME_OVER_DELAY_MS);
       } else {
@@ -80,8 +98,17 @@ export function GameScreen({ onGameOver }: { onGameOver: (score: number) => void
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
-    frame = requestAnimationFrame(loop);
+    loadAssets().then(
+      (sprites) => {
+        if (stopped) return;
+        renderer = new Renderer(ctx, sprites);
+        last = performance.now();
+        frame = requestAnimationFrame(loop);
+      },
+      (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+    );
     return () => {
+      stopped = true;
       cancelAnimationFrame(frame);
       clearTimeout(gameOverTimer);
       window.removeEventListener('keydown', onKeyDown);
@@ -96,13 +123,13 @@ export function GameScreen({ onGameOver }: { onGameOver: (score: number) => void
         component="canvas"
         ref={canvasRef}
         aria-label="Spielfeld"
-        sx={{ display: 'block', width: '100%', height: '100%', borderRadius: 2, boxShadow: 6 }}
+        sx={{ display: 'block', width: '100%', height: '100%', bgcolor: PALETTE.paper, outline: `4px solid ${PALETTE.slate}` }}
       />
-      <Paper elevation={2} sx={{ position: 'absolute', top: 12, left: 12, px: 1.5, py: 0.5, opacity: 0.9 }}>
-        <Typography variant="h6" component="p" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }} aria-live="off">
-          {score.toLocaleString('de-DE')}
+      {error && (
+        <Typography color="error" sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', p: 2, textAlign: 'center' }}>
+          {error}
         </Typography>
-      </Paper>
+      )}
     </Box>
   );
 }

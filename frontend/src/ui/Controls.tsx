@@ -1,6 +1,7 @@
 import Box from '@mui/material/Box';
 import Stack from '@mui/material/Stack';
 import Typography from '@mui/material/Typography';
+import { PALETTE } from '../game/palette';
 
 const KEYS: [string, string][] = [
   ['← →', 'bewegen'],
@@ -18,15 +19,13 @@ export function Controls() {
             component="kbd"
             sx={{
               px: 1,
-              py: 0.25,
-              border: 1,
-              borderColor: 'divider',
-              borderBottomWidth: 3,
-              borderRadius: 1,
-              bgcolor: 'background.paper',
+              py: 0.5,
+              border: 2,
+              borderColor: PALETTE.slate,
+              borderBottomWidth: 4,
+              bgcolor: PALETTE.black,
               fontFamily: 'inherit',
-              fontSize: '0.8rem',
-              fontWeight: 600,
+              fontSize: 8,
             }}
           >
             {key}

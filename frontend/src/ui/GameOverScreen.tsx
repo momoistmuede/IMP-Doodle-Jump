@@ -8,21 +8,31 @@ import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import { useState, type FormEvent } from 'react';
-import { MAX_NAME_LENGTH, submitScore, type SubmitResult } from '../api';
+import { MAX_NAME_LENGTH, submitScore, type Highscore, type SubmitResult } from '../api';
+import { PALETTE } from '../game/palette';
+import { formatScore, placeFor } from '../game/scoreboard';
 import { loadLastName, saveLastName } from './lastName';
+import { blink } from './theme';
+import { Title } from './Title';
 
 interface Props {
   score: number;
+  /** The top 10 before this round, for "NEUER HIGHSCORE – PLATZ 3!". */
+  highscores: Highscore[];
   onSaved: (result: SubmitResult) => void;
   onSkip: () => void;
   onReplay: () => void;
 }
 
-export function GameOverScreen({ score, onSaved, onSkip, onReplay }: Props) {
+export function GameOverScreen({ score, highscores, onSaved, onSkip, onReplay }: Props) {
   const [name, setName] = useState(loadLastName);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const trimmed = name.trim();
+  const place = placeFor(
+    highscores.map((h) => h.score),
+    score,
+  );
 
   const save = async (event: FormEvent) => {
     event.preventDefault();
@@ -42,22 +52,24 @@ export function GameOverScreen({ score, onSaved, onSkip, onReplay }: Props) {
   };
 
   return (
-    <Card sx={{ width: '100%', maxWidth: 420 }} elevation={4}>
+    <Card sx={{ width: '100%', maxWidth: 520 }}>
       <CardContent>
         <Stack component="form" onSubmit={save} spacing={3} sx={{ alignItems: 'center' }}>
-          <Typography variant="h4" component="h1" color="primary" sx={{ fontWeight: 800 }}>
-            Game Over
+          <Title logo={false} />
+          <Typography variant="h1" component="h2" sx={{ color: PALETTE.red, animation: `${blink} 1s steps(1) infinite` }}>
+            GAME OVER
           </Typography>
-          <Stack sx={{ alignItems: 'center' }}>
-            <Typography variant="overline" color="text.secondary">
-              Deine Punkte
+          <Stack spacing={1} sx={{ alignItems: 'center' }}>
+            <Typography variant="h3" component="p">
+              {formatScore(score)}
             </Typography>
-            <Typography variant="h3" component="p" sx={{ fontWeight: 700, fontVariantNumeric: 'tabular-nums' }}>
-              {score.toLocaleString('de-DE')}
-            </Typography>
+            {place !== null && (
+              <Typography sx={{ color: PALETTE.yellow, textAlign: 'center' }}>NEUER HIGHSCORE – PLATZ {place}!</Typography>
+            )}
           </Stack>
           <TextField
-            label="Dein Name für die Highscores"
+            placeholder="DEIN NAME?"
+            aria-label="Dein Name für die Highscores"
             value={name}
             onChange={(e) => setName(e.target.value)}
             // The space bar may still be held from the last jump: no auto-repeated spaces.
@@ -77,9 +89,9 @@ export function GameOverScreen({ score, onSaved, onSkip, onReplay }: Props) {
           <Button type="submit" variant="contained" size="large" startIcon={<SaveIcon />} disabled={!trimmed} loading={saving} fullWidth>
             Speichern
           </Button>
-          <Stack direction="row" spacing={1}>
+          <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', justifyContent: 'center', rowGap: 1 }}>
             <Button onClick={onReplay} startIcon={<ReplayIcon />}>
-              Nochmal spielen
+              Nochmal
             </Button>
             <Button onClick={onSkip} color="secondary">
               Ohne Speichern zurück

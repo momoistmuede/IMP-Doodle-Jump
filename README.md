@@ -4,14 +4,22 @@ Doodle Jump im Browser: Spring-Boot-Backend (Gradle 9, Spring Boot 4, Liquibase,
 
 ## Spielablauf
 
-1. Startbildschirm mit den 10 besten Highscores → **Play**
+**imp@jump – der einzig wahre jumphost.** Arcade-Look: Hintergründe in Pixel-Art, alles andere scharf
+gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md).
+
+1. Startbildschirm mit allen 10 Plätzen der Bestenliste (leere Plätze laden zum Mitmachen ein) →
+   **Leertaste**, **Enter** oder **Play**
 2. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
    weiterspringen), **F** schießen
 3. Wer unten aus dem Bild fällt, ist **Game Over** und kann seinen Namen für die Highscores eintragen.
 
+Anzeige im Spiel: der Score groß oben mittig, darunter `HI` (Platz 1) und `NEXT` (der nächste Platz der Top 10,
+den man noch überholen kann). Am linken Rand zeigt der Höhenmeter den Fortschritt in der aktuellen Zone
+(10 px = 1 m, je 1000 m eine Zone).
+
 Plattformen: grün = normal, blau = bewegt sich, braun = bricht weg (trägt nicht), Feder = Super-Sprung.
-Ab etwa 1500 px Höhe tauchen Monster auf: abschießen oder von oben draufspringen; seitlich oder von
-unten berührt fällt man herunter. Punkte = Höhe / 10 + 50 pro Monster.
+Ab 150 m tauchen Imps auf: abschießen oder von oben draufspringen; seitlich oder von unten berührt fällt
+man herunter. Punkte = Höhe in Metern + 50 pro Imp.
 
 ## Schnellstart: klonen und ausführen
 
