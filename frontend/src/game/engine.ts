@@ -1,4 +1,6 @@
-import { PIXELS_PER_METER, ZONES, zoneIndexAtPx, zoneParams } from './zones';
+import { impSkin, PIXELS_PER_METER, ZONES, zoneIndexAtPx, zoneParams, type MonsterKind } from './zones';
+
+export type { MonsterKind } from './zones';
 
 /**
  * Doodle Jump game logic, independent of rendering and the DOM.
@@ -40,9 +42,24 @@ export const BULLET_SPEED = 1000;
 export const BULLET_RADIUS = 5;
 export const FIRE_COOLDOWN = 0.25;
 
-/** Climbed pixels per point, and the bonus for every defeated monster. */
+/** Climbed pixels per point. */
 export const PIXELS_PER_POINT = 10;
-const KILL_BONUS = 50;
+
+/** Flyers cross the screen, chasers follow the player, shooters throw exceptions downwards. */
+const FLYER_SPEED = 110;
+const CHASER_SPEED = 60;
+export const SHOOT_INTERVAL = 2.2;
+export const ENEMY_BULLET_SPEED = 220;
+export const ENEMY_BULLET_WIDTH = 10;
+export const ENEMY_BULLET_HEIGHT = 14;
+
+/** The behaviour sets bonus and hit points; the look comes from the zone (see zones.ts). */
+export const MONSTER_TYPES: Record<MonsterKind, { bonus: number; hp: number }> = {
+  wobbler: { bonus: 50, hp: 1 },
+  flyer: { bonus: 75, hp: 1 },
+  chaser: { bonus: 100, hp: 2 },
+  shooter: { bonus: 150, hp: 1 },
+};
 
 export const MAX_LIVES = 3;
 /** Invulnerability after losing a heart to a monster, and after a parachute landing. */
@@ -107,12 +124,30 @@ export interface Platform {
 
 export interface Monster {
   id: number;
+  kind: MonsterKind;
+  /** Look: the imp of its behaviour in the zone it was created in. */
+  skin: string;
   x: number;
   y: number;
+  /** Centre of the wobble, start height of a flyer. */
   baseX: number;
+  baseY: number;
   phase: number;
+  /** Hit points; a shot takes one, a jump from above always kills. */
+  hp: number;
+  /** Horizontal speed of flyers. */
+  vx: number;
+  /** Seconds until a shooter's next exception. */
+  reload: number;
   /** The warning sound was played (the monster is about to appear). */
   announced?: boolean;
+}
+
+/** An exception thrown down by a shooter. */
+export interface EnemyBullet {
+  id: number;
+  x: number;
+  y: number;
 }
 
 export interface Bullet {
@@ -164,9 +199,12 @@ export type GameEvent =
   | { type: 'shoot' }
   | { type: 'break' }
   /** A monster is about to come into view. */
-  | { type: 'monsterNear' }
+  | { type: 'monsterNear'; kind: MonsterKind }
+  /** A shot hit a monster that survives it. */
+  | { type: 'monsterHit' }
+  | { type: 'enemyShot' }
   | { type: 'kill'; x: number; y: number; points: number; by: 'shot' | 'stomp' }
-  | { type: 'hurt'; cause: 'monster' | 'fall' | 'spikes' }
+  | { type: 'hurt'; cause: 'monster' | 'fall' | 'spikes' | 'exception' }
   /** A vanishing platform carried once and is gone. */
   | { type: 'vanish' }
   | { type: 'death' }
@@ -194,12 +232,15 @@ export interface GameState {
   player: Player;
   platforms: Platform[];
   monsters: Monster[];
+  enemyBullets: EnemyBullet[];
   bullets: Bullet[];
   powerUps: PowerUp[];
   cameraY: number;
   startY: number;
   maxHeight: number;
   kills: number;
+  /** Points for defeated monsters (the bonus depends on their behaviour). */
+  killPoints: number;
   /** Points from power-ups. */
   bonus: number;
   score: number;
@@ -306,12 +347,14 @@ export function createGame(random: () => number = Math.random, options: { intro?
     },
     platforms: [startPlatform],
     monsters: [],
+    enemyBullets: [],
     bullets: [],
     powerUps: [],
     cameraY: 0,
     startY: playerY,
     maxHeight: 0,
     kills: 0,
+    killPoints: 0,
     bonus: 0,
     score: 0,
     lives: MAX_LIVES,
@@ -380,8 +423,9 @@ export function update(state: GameState, input: Input, dt: number): void {
   } else {
     movePlayer(state, input, dt);
   }
-  moveMonsters(state, previousY);
+  moveMonsters(state, previousY, dt);
   moveBullets(state, dt);
+  moveEnemyBullets(state, dt);
   collectPowerUps(state);
 
   if (state.parachute) {
@@ -398,7 +442,7 @@ export function update(state: GameState, input: Input, dt: number): void {
     state.zone = zone;
     state.events.push({ type: 'zoneEnter', zone });
   }
-  state.score = Math.floor(state.maxHeight / PIXELS_PER_POINT) + state.kills * KILL_BONUS + state.bonus;
+  state.score = Math.floor(state.maxHeight / PIXELS_PER_POINT) + state.killPoints + state.bonus;
 
   generatePlatforms(state);
   removeBelowScreen(state);
@@ -654,14 +698,14 @@ function floatDown(state: GameState, input: Input, dt: number) {
   }
 }
 
-function moveMonsters(state: GameState, previousPlayerY: number) {
+function moveMonsters(state: GameState, previousPlayerY: number, dt: number) {
   const player = state.player;
   const killed = new Set<number>();
   for (const monster of state.monsters) {
-    monster.x = monster.baseX + Math.sin(state.time * 2 + monster.phase) * 30;
+    moveMonster(state, monster, dt);
     if (!monster.announced && monster.y + MONSTER_HEIGHT > state.cameraY - MONSTER_WARNING_DISTANCE) {
       monster.announced = true;
-      state.events.push({ type: 'monsterNear' });
+      state.events.push({ type: 'monsterNear', kind: monster.kind });
     }
     if (player.hit || state.parachute || !overlaps(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT, monster.x, monster.y, MONSTER_WIDTH, MONSTER_HEIGHT, 6)) {
       continue;
@@ -681,6 +725,70 @@ function moveMonsters(state: GameState, previousPlayerY: number) {
   }
 }
 
+function moveMonster(state: GameState, monster: Monster, dt: number) {
+  const t = state.time;
+  const onScreen = monster.y + MONSTER_HEIGHT > state.cameraY && monster.y < state.cameraY + VIEW_HEIGHT;
+  switch (monster.kind) {
+    case 'wobbler':
+      monster.x = monster.baseX + Math.sin(t * 2 + monster.phase) * 30;
+      break;
+    case 'flyer':
+      // Across the screen and back, slightly up and down.
+      monster.x += monster.vx * dt;
+      if (monster.x < 0 || monster.x > WORLD_WIDTH - MONSTER_WIDTH) {
+        monster.x = clamp(monster.x, 0, WORLD_WIDTH - MONSTER_WIDTH);
+        monster.vx = -monster.vx;
+      }
+      monster.y = monster.baseY + Math.sin(t * 3 + monster.phase) * 6;
+      break;
+    case 'chaser': {
+      // Slowly after the player, as long as it is on screen and the player is not floating down.
+      if (!onScreen || state.parachute || state.player.hit) {
+        break;
+      }
+      const dx = state.player.x + PLAYER_WIDTH / 2 - (monster.x + MONSTER_WIDTH / 2);
+      const dy = state.player.y + PLAYER_HEIGHT / 2 - (monster.y + MONSTER_HEIGHT / 2);
+      const distance = Math.hypot(dx, dy);
+      if (distance > 1) {
+        monster.x += (dx / distance) * CHASER_SPEED * dt;
+        monster.y += (dy / distance) * CHASER_SPEED * dt;
+      }
+      break;
+    }
+    case 'shooter':
+      monster.x = monster.baseX + Math.sin(t * 1.5 + monster.phase) * 15;
+      if (onScreen && !state.parachute) {
+        monster.reload -= dt;
+        if (monster.reload <= 0) {
+          monster.reload = SHOOT_INTERVAL;
+          state.enemyBullets.push({ id: state.nextId++, x: monster.x + MONSTER_WIDTH / 2 - ENEMY_BULLET_WIDTH / 2, y: monster.y + MONSTER_HEIGHT });
+          state.events.push({ type: 'enemyShot' });
+        }
+      }
+      break;
+  }
+}
+
+/** Exceptions fall down; one that hits costs a heart like touching a monster. */
+function moveEnemyBullets(state: GameState, dt: number) {
+  const player = state.player;
+  const remaining: EnemyBullet[] = [];
+  for (const bullet of state.enemyBullets) {
+    bullet.y += ENEMY_BULLET_SPEED * dt;
+    const hits =
+      !player.hit &&
+      !state.parachute &&
+      state.invulnerable === 0 &&
+      overlaps(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT, bullet.x, bullet.y, ENEMY_BULLET_WIDTH, ENEMY_BULLET_HEIGHT, 4);
+    if (hits) {
+      loseHeart(state, 'exception');
+    } else if (bullet.y < state.cameraY + VIEW_HEIGHT + 50) {
+      remaining.push(bullet);
+    }
+  }
+  state.enemyBullets = remaining;
+}
+
 /** Touched a monster from the side or below: one heart less; the monster stays. */
 function hurt(state: GameState, monster: Monster) {
   const player = state.player;
@@ -695,7 +803,7 @@ function hurt(state: GameState, monster: Monster) {
 }
 
 /** One heart less and 2 s of blinking invulnerability; with the last heart the player dies. */
-function loseHeart(state: GameState, cause: 'monster' | 'spikes') {
+function loseHeart(state: GameState, cause: 'monster' | 'spikes' | 'exception') {
   const player = state.player;
   state.lives--;
   state.events.push({ type: 'hurt', cause });
@@ -717,8 +825,13 @@ function moveBullets(state: GameState, dt: number) {
       overlaps(bullet.x - BULLET_RADIUS, bullet.y - BULLET_RADIUS, 2 * BULLET_RADIUS, 2 * BULLET_RADIUS, m.x, m.y, MONSTER_WIDTH, MONSTER_HEIGHT, 0),
     );
     if (target) {
-      state.monsters = state.monsters.filter((m) => m !== target);
-      killMonster(state, target, 'shot');
+      target.hp--;
+      if (target.hp > 0) {
+        state.events.push({ type: 'monsterHit' });
+      } else {
+        state.monsters = state.monsters.filter((m) => m !== target);
+        killMonster(state, target, 'shot');
+      }
     } else if (bullet.y > state.cameraY - 50) {
       remaining.push(bullet);
     }
@@ -727,8 +840,10 @@ function moveBullets(state: GameState, dt: number) {
 }
 
 function killMonster(state: GameState, monster: Monster, by: 'shot' | 'stomp') {
+  const points = MONSTER_TYPES[monster.kind].bonus;
   state.kills++;
-  state.events.push({ type: 'kill', x: monster.x + MONSTER_WIDTH / 2, y: monster.y, points: KILL_BONUS, by });
+  state.killPoints += points;
+  state.events.push({ type: 'kill', x: monster.x + MONSTER_WIDTH / 2, y: monster.y, points, by });
 }
 
 function collectPowerUps(state: GameState) {
@@ -839,10 +954,14 @@ function addChainPlatform(state: GameState, below: ChainLink, withMonsters: bool
   }
 
   if (withMonsters && height > MONSTER_START_HEIGHT && state.lastMonsterY - y > VIEW_HEIGHT && random() < params.monsterChance) {
-    const monsterY = y - MONSTER_HEIGHT - 30;
-    const baseX = 30 + random() * (WORLD_WIDTH - MONSTER_WIDTH - 60);
-    state.monsters.push({ id: state.nextId++, x: baseX, y: monsterY, baseX, phase: random() * Math.PI * 2 });
-    state.lastMonsterY = monsterY;
+    const zoneIndex = zoneIndexAtPx(height);
+    const kind = ZONES[zoneIndex].monsters[Math.floor(random() * ZONES[zoneIndex].monsters.length)];
+    const monster = newMonster(state, kind, 30 + random() * (WORLD_WIDTH - MONSTER_WIDTH - 60), y - MONSTER_HEIGHT - 30, impSkin(zoneIndex, kind));
+    monster.phase = random() * Math.PI * 2;
+    monster.vx = (random() < 0.5 ? -1 : 1) * FLYER_SPEED;
+    monster.reload = SHOOT_INTERVAL * (0.5 + random() * 0.5);
+    state.monsters.push(monster);
+    state.lastMonsterY = monster.y;
   }
   return { y: lowestPoint(platform), platform };
 }
@@ -902,6 +1021,10 @@ function maybeAddPowerUp(state: GameState, platform: Platform) {
   }
 }
 
+export function newMonster(state: GameState, kind: MonsterKind, x: number, y: number, skin = impSkin(0, kind)): Monster {
+  return { id: state.nextId++, kind, skin, x, y, baseX: x, baseY: y, phase: 0, hp: MONSTER_TYPES[kind].hp, vx: 0, reload: SHOOT_INTERVAL };
+}
+
 function newPlatform(state: GameState, x: number, y: number, kind: PlatformKind, width = PLATFORM_WIDTH): Platform {
   return { id: state.nextId++, x, y, width, kind, vx: 0, dx: 0, spring: false, broken: false, fallVelocity: 0, crumble: -1, baseY: y, phase: 0, omega: 0 };
 }
@@ -913,6 +1036,7 @@ function removeBelowScreen(state: GameState) {
   const limit = state.cameraY + VIEW_HEIGHT + 100;
   state.platforms = state.platforms.filter((p) => p.y < limit);
   state.monsters = state.monsters.filter((m) => m.y < limit);
+  state.enemyBullets = state.enemyBullets.filter((b) => b.y < limit);
   state.powerUps = state.powerUps.filter((p) => p.y < limit);
 }
 
