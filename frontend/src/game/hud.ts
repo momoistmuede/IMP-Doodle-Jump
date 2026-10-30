@@ -2,15 +2,13 @@ import { heightOf, MAX_LIVES, type GameState } from './engine';
 import { PALETTE } from './palette';
 import { formatScore, hiScore, nextTarget } from './scoreboard';
 import type { Sprites } from './sprites';
-import { ZONE_HEIGHT_M, ZONE_NAMES, zoneIndexAt } from './zones';
+import { PIXELS_PER_METER, ZONE_HEIGHT_M, ZONE_NAMES, zoneIndexAt } from './zones';
 
 /**
  * The arcade HUD, drawn straight onto the canvas: it scales with the game and stays sharp, and React
  * does not re-render on every point. The lower sixth of the screen stays free for touch buttons later.
  */
 export const FONT_FAMILY = '"Press Start 2P"';
-/** 10 px = 1 m, so the metres equal the height points of the score. */
-export const PIXELS_PER_METER = 10;
 
 const POPUP_SECONDS = 0.8;
 const POPUP_RISE = 40;
@@ -24,6 +22,13 @@ const FLASH_SECONDS = 0.3;
 const BURST_SECONDS = 0.6;
 /** The best-height marker appears once the player is this far below it, e.g. after a parachute fall. */
 const BEST_MARKER_DISTANCE = 300;
+
+interface Banner {
+  title: string;
+  subtitle?: string;
+  age: number;
+  duration: number;
+}
 
 interface Particle {
   x: number;
@@ -57,11 +62,13 @@ export interface Hud {
   particles: Particle[];
   /** Sound switched off (key M): shown as a crossed-out speaker. */
   muted: boolean;
+  /** Zone banner or GO! in the middle of the screen. */
+  banner: Banner | null;
   time: number;
 }
 
 export function createHud(top: readonly number[]): Hud {
-  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, flash: 0, particles: [], muted: false, time: 0 };
+  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, flash: 0, particles: [], muted: false, banner: null, time: 0 };
 }
 
 /**
@@ -84,11 +91,28 @@ export function updateHud(hud: Hud, state: GameState, dt: number): boolean {
     particle.y += particle.vy * dt;
   }
   hud.particles = hud.particles.filter((p) => p.age < BURST_SECONDS);
+  if (hud.banner) {
+    hud.banner.age += dt;
+    if (hud.banner.age >= hud.banner.duration) {
+      hud.banner = null;
+    }
+  }
 
   for (const event of state.events) {
     switch (event.type) {
+      case 'zoneEnter':
+        hud.banner = { title: `ZONE ${event.zone + 1}`, subtitle: ZONE_NAMES[event.zone], age: 0, duration: 2 };
+        break;
+      case 'introZone':
+        // On the way down every name stays readable: one second per zone, no fanfare.
+        hud.banner = { title: `ZONE ${event.zone + 1}`, subtitle: ZONE_NAMES[event.zone], age: 0, duration: 1 };
+        break;
+      case 'introLand':
+        hud.banner = { title: 'GO!', age: 0, duration: 1 };
+        break;
       case 'kill':
       case 'heartBonus':
+      case 'points':
         hud.popups.push({ text: `+${event.points}`, x: event.x, y: event.y, age: 0 });
         hud.pulse = PULSE_SECONDS;
         break;
@@ -159,6 +183,17 @@ export function drawHud(ctx: CanvasRenderingContext2D, hud: Hud, state: GameStat
   drawHearts(ctx, hud, state, sprites, scale);
   drawMeter(ctx, state);
   drawSpeaker(ctx, hud.muted);
+
+  if (hud.banner) {
+    const { title, subtitle } = hud.banner;
+    text(ctx, title, center, 236, 32, subtitle ? PALETTE.white : PALETTE.yellow, 'center');
+    if (subtitle) {
+      text(ctx, subtitle, center, 276, 16, PALETTE.yellow, 'center');
+    }
+  }
+  if (state.phase === 'intro' && Math.floor(hud.time * 2) % 2 === 0) {
+    text(ctx, 'SPACE > SKIP', center, 560, 8, PALETTE.white, 'center');
+  }
 }
 
 /** Small speaker at the top left; crossed out while the sound is off. */
