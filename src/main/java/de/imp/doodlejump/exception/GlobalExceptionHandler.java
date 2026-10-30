@@ -35,6 +35,11 @@ public class GlobalExceptionHandler {
     return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(errors);
   }
 
+  @ExceptionHandler(InvalidPlayerNameException.class)
+  public ResponseEntity<List<FieldErrorDto>> handleInvalidName(InvalidPlayerNameException ex) {
+    return ResponseEntity.status(HttpStatus.UNPROCESSABLE_CONTENT).body(List.of(new FieldErrorDto("name", ex.getMessage())));
+  }
+
   @ExceptionHandler(HttpMessageNotReadableException.class)
   public ResponseEntity<ErrorResponseDto> handleUnreadable(HttpMessageNotReadableException ex) {
     log.debug("Unreadable request body: {}", ex.getMessage());

@@ -1,5 +1,6 @@
 package de.imp.doodlejump.rest.v1.dto;
 
+import de.imp.doodlejump.domain.PlayerName;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -11,6 +12,6 @@ public record SubmitScoreRequest(
     @NotNull @Min(0) @Max(SubmitScoreRequest.MAX_SCORE) Integer score) {
 
   /** Matches the column length in db/changelog/changes/001-highscore.xml. */
-  public static final int MAX_NAME_LENGTH = 20;
+  public static final int MAX_NAME_LENGTH = PlayerName.MAX_LENGTH;
   public static final int MAX_SCORE = 10_000_000;
 }

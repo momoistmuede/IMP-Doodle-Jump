@@ -17,7 +17,8 @@ public class HighscoreService {
   private final HighscoreRepository repository;
   private final Clock clock;
 
-  public List<Highscore> top() {
+  /** The best players, each with their skin (if saved). */
+  public List<TopEntry> top() {
     return repository.findTop(TOP_LIMIT);
   }
 
@@ -26,14 +27,9 @@ public class HighscoreService {
    */
   @Transactional
   public SubmitResult submit(String name, int score) {
-    var normalized = normalizeName(name);
+    var normalized = PlayerName.normalize(name);
     var newBest = repository.saveIfBetter(new Highscore(normalized, score, clock.instant()));
     var best = repository.findByName(normalized).orElseThrow();
     return new SubmitResult(best, newBest, repository.rankOf(best.score()));
-  }
-
-  /** Trims and collapses inner whitespace, so "Max  " and "Max" are the same player. */
-  static String normalizeName(String name) {
-    return name.strip().replaceAll("\\s+", " ");
   }
 }

@@ -1,4 +1,4 @@
-import { DEFAULT_COLORS, recolorSvg, type SkinColors } from './skin';
+import { DEFAULT_SKIN, GLASSES, GLASSES_BOX, HAT_BOX, HATS, recolorSvg, skinColors, type FigureParts, type Pose, type SkinColors } from './skin';
 import { ZONES, impSkin, type ImpSprite, type MonsterKind } from './zones';
 
 /**
@@ -45,7 +45,17 @@ export const SPRITES = {
   'heart-empty': { file: 'heart-empty.svg', x: 0, y: 0, width: 24, height: 24 },
   /** The IMP logo on every imp's shirt, centred on the anchor point. */
   'imp-logo': { file: 'imp-logo-shirt.svg', x: -7, y: -3.5, width: 14, height: 7 },
+  // Accessories of the skin (2.4), drawn at the anchor points of the pose (skin.ts).
+  ...accessories('hat', HATS, HAT_BOX),
+  ...accessories('glasses', GLASSES, GLASSES_BOX),
 } satisfies Record<string, SpriteSpec>;
+
+function accessories<P extends string, T extends readonly (readonly [string, string])[]>(prefix: P, list: T, box: Omit<SpriteSpec, 'file'>) {
+  return Object.fromEntries(list.slice(1).map(([id]) => [`${prefix}-${id}`, { file: `${prefix}-${id}.svg`, ...box }])) as Record<
+    `${P}-${Exclude<T[number][0], 'none'>}`,
+    SpriteSpec
+  >;
+}
 
 export type SpriteName = keyof typeof SPRITES;
 
@@ -61,15 +71,22 @@ export class Sprites {
   private constructor(
     private readonly images: Map<string, HTMLImageElement>,
     private readonly specs: Map<string, SpriteSpec>,
+    /** Sources of the player sprites, recoloured for every skin. */
+    private readonly skinned: Map<string, string>,
   ) {}
 
-  /** Loads all sprites; player sprites are recoloured with the given skin. */
-  static async load(colors: SkinColors = DEFAULT_COLORS): Promise<Sprites> {
+  /** Loads all sprites; player sprites get the default skin until `setSkin`. */
+  static async load(): Promise<Sprites> {
     const images = new Map<string, HTMLImageElement>();
     const specs = new Map<string, SpriteSpec>();
+    const skinned = new Map<string, string>();
+    const colors = skinColors(DEFAULT_SKIN);
     await Promise.all(
       (Object.entries(SPRITES) as [SpriteName, SpriteSpec][]).map(async ([name, spec]) => {
         const svg = await fetchSvg(spec.file);
+        if (spec.skinned) {
+          skinned.set(name, svg);
+        }
         images.set(name, await svgImage(spec.skinned ? recolorSvg(svg, colors) : svg));
         specs.set(name, spec);
       }),
@@ -91,7 +108,17 @@ export class Sprites {
         }),
       ),
     );
-    return new Sprites(images, specs);
+    return new Sprites(images, specs, skinned);
+  }
+
+  /** Recolours the player sprites once per round; there is no recolouring per frame. */
+  async setSkin(colors: SkinColors) {
+    await Promise.all(
+      [...this.skinned].map(async ([name, svg]) => {
+        this.images.set(name, await svgImage(recolorSvg(svg, colors)));
+        this.rasters.delete(name);
+      }),
+    );
   }
 
   /** Draws a sprite at world position (x, y); the context is already scaled to world pixels. */
@@ -127,6 +154,29 @@ export class Sprites {
     }
     return canvas;
   }
+}
+
+let figureParts: Promise<FigureParts> | undefined;
+
+/** SVG sources for whole figures (mini figures in the top list, skin editor preview); loaded once. */
+export function loadFigureParts(): Promise<FigureParts> {
+  figureParts ??= (async () => {
+    const poses: Pose[] = ['stand', 'jump', 'fall', 'shoot', 'dead'];
+    const [poseSvgs, hatSvgs, glassesSvgs, parachute] = await Promise.all([
+      Promise.all(poses.map((pose) => fetchSvg(`player-${pose}.svg`))),
+      Promise.all(HATS.slice(1).map(([id]) => fetchSvg(`hat-${id}.svg`))),
+      Promise.all(GLASSES.slice(1).map(([id]) => fetchSvg(`glasses-${id}.svg`))),
+      fetchSvg('parachute.svg'),
+    ]);
+    return {
+      poses: Object.fromEntries(poses.map((pose, i) => [pose, poseSvgs[i]])) as Record<Pose, string>,
+      hats: Object.fromEntries(HATS.slice(1).map(([id], i) => [id, hatSvgs[i]])),
+      glasses: Object.fromEntries(GLASSES.slice(1).map(([id], i) => [id, glassesSvgs[i]])),
+      parachute,
+    };
+  })();
+  figureParts.catch(() => (figureParts = undefined));
+  return figureParts;
 }
 
 async function fetchSvg(file: string): Promise<string> {
