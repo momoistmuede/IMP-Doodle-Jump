@@ -20,10 +20,15 @@ export interface ZoneParams {
   movingShare: number;
   movingSpeed: number;
   springChance: number;
-  /** Share of special chain platforms (vanishing, crumbling …; stage 5). */
+  /** Share of special chain platforms (vanishing, crumbling, vertical, short). */
   specialShare: number;
   monsterChance: number;
+  /** Share of spiked platforms among the decoys between chain platforms. */
+  spikeShare: number;
 }
+
+/** Special chain platforms; each zone adds new ones and keeps the earlier ones. */
+export type SpecialPlatform = 'vanishing' | 'crumbling' | 'vertical' | 'short';
 
 export interface Zone {
   name: string;
@@ -33,32 +38,36 @@ export interface Zone {
   /** Motif of the points power-up in this zone, and its placeholder colour. */
   pointsSkin: string;
   pointsColor: string;
+  specials: readonly SpecialPlatform[];
   params: ZoneParams;
 }
 
-const p = (minGap: number, maxGap: number, movingShare: number, movingSpeed: number, springChance: number, specialShare: number, monsterChance: number): ZoneParams => ({
-  minGap,
-  maxGap,
-  movingShare,
-  movingSpeed,
-  springChance,
-  specialShare,
-  monsterChance,
-});
+const p = (
+  minGap: number,
+  maxGap: number,
+  movingShare: number,
+  movingSpeed: number,
+  springChance: number,
+  specialShare: number,
+  monsterChance: number,
+  spikeShare = 0,
+): ZoneParams => ({ minGap, maxGap, movingShare, movingSpeed, springChance, specialShare, monsterChance, spikeShare });
+
+const ALL_SPECIALS: readonly SpecialPlatform[] = ['vanishing', 'crumbling', 'vertical', 'short'];
 
 export const ZONES: readonly Zone[] = [
-  { name: 'HOTLINE', background: PALETTE.paper, track: 'hotline', pointsSkin: 'ticket', pointsColor: PALETTE.teal, params: p(40, 90, 0.1, 90, 0.06, 0, 0.04) },
-  { name: 'PROFESSIONAL SERVICE', background: PALETTE.sky, track: 'service', pointsSkin: 'acceptance', pointsColor: PALETTE.red, params: p(55, 110, 0.15, 110, 0.05, 0.15, 0.06) },
-  { name: 'PROJEKTMANAGEMENT', background: PALETTE.apricot, track: 'projekt', pointsSkin: 'milestone', pointsColor: PALETTE.violetDark, params: p(70, 125, 0.2, 130, 0.05, 0.2, 0.08) },
-  { name: 'DEVELOPMENT', background: PALETTE.night, track: 'development', pointsSkin: 'green-build', pointsColor: PALETTE.neon, params: p(80, 135, 0.3, 150, 0.04, 0.25, 0.11) },
-  { name: 'OPERATIONS', background: PALETTE.slate, track: 'operations', pointsSkin: 'uptime', pointsColor: PALETTE.yellow, params: p(90, 145, 0.35, 170, 0.04, 0.25, 0.13) },
-  { name: 'VERTRIEB', background: PALETTE.ochre, track: 'vertrieb', pointsSkin: 'contract', pointsColor: PALETTE.navyDark, params: p(95, 155, 0.4, 180, 0.03, 0.3, 0.15) },
-  { name: 'PRODUKTMANAGEMENT', background: PALETTE.violet, track: 'produkt', pointsSkin: 'idea', pointsColor: PALETTE.cream, params: p(100, 160, 0.45, 190, 0.03, 0.3, 0.17) },
-  { name: 'CHEFSESSEL', background: PALETTE.wood, track: 'chefsessel', pointsSkin: 'bonus-check', pointsColor: PALETTE.gold, params: p(105, 165, 0.5, 200, 0.03, 0.3, 0.19) },
+  { name: 'HOTLINE', background: PALETTE.paper, track: 'hotline', pointsSkin: 'ticket', pointsColor: PALETTE.teal, specials: [], params: p(40, 90, 0.1, 90, 0.06, 0, 0.04) },
+  { name: 'PROFESSIONAL SERVICE', background: PALETTE.sky, track: 'service', pointsSkin: 'acceptance', pointsColor: PALETTE.red, specials: ['vanishing'], params: p(55, 110, 0.15, 110, 0.05, 0.15, 0.06) },
+  { name: 'PROJEKTMANAGEMENT', background: PALETTE.apricot, track: 'projekt', pointsSkin: 'milestone', pointsColor: PALETTE.violetDark, specials: ['vanishing', 'crumbling', 'vertical'], params: p(70, 125, 0.2, 130, 0.05, 0.2, 0.08) },
+  { name: 'DEVELOPMENT', background: PALETTE.night, track: 'development', pointsSkin: 'green-build', pointsColor: PALETTE.neon, specials: ALL_SPECIALS, params: p(80, 135, 0.3, 150, 0.04, 0.25, 0.11) },
+  { name: 'OPERATIONS', background: PALETTE.slate, track: 'operations', pointsSkin: 'uptime', pointsColor: PALETTE.yellow, specials: ALL_SPECIALS, params: p(90, 145, 0.35, 170, 0.04, 0.25, 0.13, 0.3) },
+  { name: 'VERTRIEB', background: PALETTE.ochre, track: 'vertrieb', pointsSkin: 'contract', pointsColor: PALETTE.navyDark, specials: ALL_SPECIALS, params: p(95, 155, 0.4, 180, 0.03, 0.3, 0.15, 0.4) },
+  { name: 'PRODUKTMANAGEMENT', background: PALETTE.violet, track: 'produkt', pointsSkin: 'idea', pointsColor: PALETTE.cream, specials: ALL_SPECIALS, params: p(100, 160, 0.45, 190, 0.03, 0.3, 0.17, 0.5) },
+  { name: 'CHEFSESSEL', background: PALETTE.wood, track: 'chefsessel', pointsSkin: 'bonus-check', pointsColor: PALETTE.gold, specials: ALL_SPECIALS, params: p(105, 165, 0.5, 200, 0.03, 0.3, 0.19, 0.55) },
 ];
 
 /** From 8000 m on: the game gets no harder, only longer. */
-export const CAP: ZoneParams = p(110, 170, 0.6, 230, 0.03, 0.35, 0.22);
+export const CAP: ZoneParams = p(110, 170, 0.6, 230, 0.03, 0.35, 0.22, 0.6);
 
 /** Within a zone the values rise halfway to the next zone; the rest is the jump at the zone change. */
 const RISE_WITHIN_ZONE = 0.5;

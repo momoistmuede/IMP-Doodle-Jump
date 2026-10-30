@@ -30,6 +30,9 @@ größere Abstände, mehr bewegte Plattformen, mehr Imps. **Punkte-Fundstücke**
 farbiger Kreis mit der Zonennummer).
 
 Plattformen: grün = normal, blau = bewegt sich, braun = bricht weg (trägt nicht), Feder = Super-Sprung.
+Ab Professional Service: rosa gestrichelt = verschwindet nach einem Sprung; ab Projektmanagement: Stein =
+zerbröselt 1 s nach der Landung, gelb = fährt auf und ab; ab Development: kurze, schnellere Plattformen;
+ab Operations: **Stacheln** – wer darauf landet, verliert ein Herz.
 Ab 150 m tauchen Imps auf: abschießen oder von oben draufspringen. Punkte = Höhe in Metern + 50 pro Imp
 + Bonuspunkte aus Fundstücken.
 
