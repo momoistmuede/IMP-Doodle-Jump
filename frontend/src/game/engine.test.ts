@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   BULLET_SPEED,
+  JETPACK_DURATION,
+  JETPACK_SPEED,
   ENEMY_BULLET_SPEED,
   MONSTER_TYPES,
   newMonster,
@@ -803,6 +805,94 @@ describe('engine', () => {
       expect(zone3.every((m) => m.skin.endsWith('@2'))).toBe(true);
       const zone4 = seen(3);
       expect(new Set(zone4.map((m) => m.kind))).toEqual(new Set(['chaser', 'shooter']));
+    });
+  });
+
+  describe('jetpack', () => {
+    function withJetpack() {
+      const state = emptyGame();
+      const p = state.player;
+      state.powerUps.push({ id: 900, kind: 'jetpack', x: p.x, y: p.y });
+      return state;
+    }
+
+    it('flies straight up for 3 s and ends with a normal jump', () => {
+      const state = withJetpack();
+      const startY = state.player.y;
+      update(state, createInput(), DT);
+      expect(state.jetpack).toBeGreaterThan(0);
+      const events: string[] = [];
+      let t = DT;
+      while (state.jetpack > 0 && t < 5) {
+        update(state, createInput(), DT);
+        events.push(...state.events.map((e) => e.type));
+        state.events = [];
+        t += DT;
+      }
+      expect(t).toBeCloseTo(JETPACK_DURATION, 1);
+      expect(state.jetpack).toBe(0);
+      expect(state.player.vy).toBe(-JUMP_VELOCITY);
+      expect(state.invulnerable).toBeGreaterThan(0.9);
+      expect(startY - state.player.y).toBeCloseTo(JETPACK_SPEED * JETPACK_DURATION, -2);
+      expect(events.filter((e) => e === 'jetpackSputter')).toHaveLength(1);
+      expect(events.at(-1)).toBe('jetpackEnd');
+    });
+
+    it('is steerable, but no shooting and no platforms', () => {
+      const state = withJetpack();
+      update(state, createInput(), DT);
+      const input = createInput();
+      input.right = true;
+      input.fire = true;
+      const x = state.player.x;
+      update(state, input, DT);
+      run(state, input, 0.3);
+      expect(state.bullets).toHaveLength(0);
+      expect(state.player.x).not.toBe(x);
+      expect(state.player.standingOn).toBeNull();
+    });
+
+    it('flies through monsters and exceptions without losing a heart', () => {
+      const state = withJetpack();
+      update(state, createInput(), DT);
+      const p = state.player;
+      for (let i = 0; i < 5; i++) {
+        state.monsters.push({ ...newMonster(state, 'wobbler', p.x, p.y - 150 - i * 200), phase: -Math.PI / 2 });
+        state.enemyBullets.push({ id: 950 + i, x: p.x + 15, y: p.y - 100 - i * 200 });
+      }
+      run(state, createInput(), 1.5);
+      expect(state.lives).toBe(MAX_LIVES);
+      expect(state.kills).toBe(0);
+    });
+
+    it('appears from 300 m on, at least 500 m apart', () => {
+      const state = createGame(seeded(77));
+      state.platforms = [];
+      state.powerUps = [];
+      fillRange(state, state.startY, state.startY - 400000);
+      const jetpacks = state.powerUps.filter((p) => p.kind === 'jetpack').map((p) => state.startY - p.y).sort((a, b) => a - b);
+      expect(jetpacks.length).toBeGreaterThan(2);
+      expect(jetpacks[0]).toBeGreaterThanOrEqual(3000);
+      for (let i = 1; i < jetpacks.length; i++) {
+        expect(jetpacks[i] - jetpacks[i - 1]).toBeGreaterThanOrEqual(5000 - 100);
+      }
+    });
+
+    it('never appears in the parachute area', () => {
+      const state = createGame(seeded(78));
+      state.platforms = [];
+      state.powerUps = [];
+      state.parachute = true;
+      fillRange(state, state.startY - 5000, state.startY - 400000);
+      expect(state.powerUps.filter((p) => p.kind === 'jetpack')).toHaveLength(0);
+    });
+
+    it('leaves a climbable chain behind after the flight', () => {
+      const state = createGame(seeded(79));
+      state.powerUps.push({ id: 900, kind: 'jetpack', x: state.player.x, y: state.player.y });
+      run(state, createInput(), JETPACK_DURATION + 0.05);
+      const visible = state.platforms.filter((p) => p.y > state.cameraY - VIEW_HEIGHT && p.y < state.cameraY + VIEW_HEIGHT);
+      expectClimbable(visible, Math.max(...visible.filter(supports).map(lowestPoint)), state.cameraY - VIEW_HEIGHT + MAX_GAP, 'after the jetpack');
     });
   });
 });
