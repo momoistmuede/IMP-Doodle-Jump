@@ -70,6 +70,12 @@ export const EFFECTS = {
     { wave: 'square', freq: n('B6'), duration: 0.05, volume: 0.22, envelope: 'hold', duty: 0.25 },
     { wave: 'square', freq: n('E7'), duration: 0.25, volume: 0.2, duty: 0.25 },
   ],
+  vanish: [{ wave: 'sine', freq: 300, to: 1100, duration: 0.09, volume: 0.5 }],
+  /** Landed on spikes. */
+  spike: [
+    { wave: 'square', freq: 2400, to: 1600, duration: 0.05, volume: 0.25, duty: 0.25 },
+    { wave: 'noise', freq: 8000, duration: 0.05, volume: 0.25, at: 0 },
+  ],
   /** New zone reached. */
   fanfare: [
     ...arpeggio(['G4', 'C5', 'E5'], 0.1, 'square', 0.28, 'hold'),

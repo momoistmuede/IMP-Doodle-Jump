@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 68 14" width="68" height="14">
+  <!-- Fährt auf und ab: gelb mit Pfeilen nach oben und unten. -->
+  <rect x="1" y="1" width="66" height="12" rx="6" fill="#f1c40f"/>
+  <path d="M6 10.5 H62" stroke="#b7950b" stroke-width="2.5" stroke-linecap="round"/>
+  <path d="M14 2.5 l4 4.5 h-8 Z M54 11.5 l4 -4.5 h-8 Z" fill="#1d3557"/>
+  <rect x="1" y="1" width="66" height="12" rx="6" fill="none" stroke="#3b3a2f" stroke-width="2"/>
+</svg>

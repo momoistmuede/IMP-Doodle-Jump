@@ -19,6 +19,7 @@ export function playEventSounds(events: readonly GameEvent[], state: GameState) 
       case 'spring':
       case 'shoot':
       case 'break':
+      case 'vanish':
       case 'parachuteOpen':
       case 'parachuteLand':
       case 'heart':
@@ -48,6 +49,9 @@ export function playEventSounds(events: readonly GameEvent[], state: GameState) 
         sound.play(event.by === 'shot' ? 'killShot' : 'killStomp');
         break;
       case 'hurt':
+        if (event.cause === 'spikes') {
+          sound.play('spike');
+        }
         sound.play(event.cause === 'fall' ? 'fall' : 'hurt');
         if (state.lives === 1) {
           WARNINGS.forEach((delay) => sound.play('warn', { delay }));

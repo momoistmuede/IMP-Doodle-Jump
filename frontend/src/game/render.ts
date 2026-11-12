@@ -4,6 +4,7 @@ import {
   PLATFORM_HEIGHT,
   PLAYER_WIDTH,
   POWER_UP_SIZE,
+  SHORT_PLATFORM_WIDTH,
   VIEW_HEIGHT,
   WORLD_WIDTH,
   type GameState,
@@ -58,7 +59,7 @@ export class Renderer {
 
     ctx.translate(0, -state.cameraY);
     for (const platform of state.platforms) {
-      this.drawPlatform(platform, scale);
+      this.drawPlatform(platform, state.time, scale);
     }
     for (const monster of state.monsters) {
       this.drawMonster(monster, state.time, scale);
@@ -131,9 +132,9 @@ export class Renderer {
     bg.fillRect(16, 0, 1, BACKGROUND_HEIGHT);
   }
 
-  private drawPlatform(platform: Platform, scale: number) {
+  private drawPlatform(platform: Platform, time: number, scale: number) {
     const ctx = this.ctx;
-    const sprite: SpriteName = `platform-${platform.kind}`;
+    const sprite = platformSprite(platform);
     if (platform.broken) {
       // Two halves tilting away from each other while falling.
       const tilt = Math.min(0.6, platform.fallVelocity / 1500);
@@ -149,7 +150,9 @@ export class Renderer {
       }
       return;
     }
-    this.sprites.draw(ctx, sprite, platform.x, platform.y, scale);
+    // A crumbling platform shakes before it breaks.
+    const shake = platform.crumble > 0 ? Math.sin(time * 70) * 1.5 : 0;
+    this.sprites.draw(ctx, sprite, platform.x + shake, platform.y, scale);
     if (platform.spring) {
       this.sprites.draw(ctx, 'spring', platform.x + platform.width / 2 - 8, platform.y - 11, scale);
     }
@@ -233,6 +236,13 @@ export class Renderer {
     this.sprites.draw(ctx, 'imp-logo', LOGO_ANCHOR.x, LOGO_ANCHOR.y, scale);
     ctx.restore();
   }
+}
+
+function platformSprite(platform: Platform): SpriteName {
+  if (platform.width === SHORT_PLATFORM_WIDTH) {
+    return platform.kind === 'moving' ? 'platform-moving-short' : 'platform-normal-short';
+  }
+  return `platform-${platform.kind}`;
 }
 
 /**

@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
   BULLET_SPEED,
+  CRUMBLE_DELAY,
+  lowestPoint,
+  SHORT_PLATFORM_WIDTH,
+  spikeOverlaps,
+  supports,
+  VERTICAL_AMPLITUDE,
+  type Platform,
   fillRange,
   INTRO_DURATION,
   INTRO_START_M,
@@ -52,6 +59,7 @@ function emptyGame(): GameState {
   const state = createGame(seeded(1));
   state.platforms = state.platforms.slice(0, 1);
   state.monsters = [];
+  state.powerUps = [];
   state.chainTopY = -1e9; // no further generation
   return state;
 }
@@ -404,10 +412,7 @@ describe('engine', () => {
         const fromY = state.startY - zone * 10000;
         const toY = fromY - 4000;
         fillRange(state, fromY, toY);
-        const ys = [fromY, toY, ...state.platforms.filter((p) => p.kind !== 'breaking').map((p) => p.y)].sort((a, b) => a - b);
-        for (let i = 1; i < ys.length; i++) {
-          expect(ys[i] - ys[i - 1], `zone ${zone + 1}`).toBeLessThanOrEqual(MAX_GAP);
-        }
+        expectClimbable(state.platforms, fromY, toY, `zone ${zone + 1}`);
       }
     });
 
@@ -514,4 +519,174 @@ describe('engine', () => {
       expect(state.player.vy).toBeLessThan(0);
     });
   });
+
+  describe('special platforms', () => {
+    /** A game with one platform of the given kind under the falling player. */
+    function landingOn(kind: Platform['kind']) {
+      const state = emptyGame();
+      const platform = state.platforms[0];
+      platform.kind = kind;
+      state.player.standingOn = null;
+      state.player.y = platform.y - PLAYER_HEIGHT - 10;
+      state.player.vy = 200;
+      return { state, platform };
+    }
+
+    it('a vanishing platform carries once and is gone after the jump', () => {
+      const { state, platform } = landingOn('vanishing');
+      const input = createInput();
+      input.jump = true;
+      const events: string[] = [];
+      for (let i = 0; i < 10; i++) {
+        update(state, input, DT);
+        events.push(...state.events.map((e) => e.type));
+        state.events = [];
+      }
+      expect(state.player.vy).toBeLessThan(0);
+      expect(state.platforms).not.toContain(platform);
+      expect(events).toContain('vanish');
+    });
+
+    it('a crumbling platform breaks one second after the landing', () => {
+      const { state, platform } = landingOn('crumbling');
+      run(state, createInput(), 0.2);
+      expect(state.player.standingOn).toBe(platform.id);
+      expect(platform.broken).toBe(false);
+      run(state, createInput(), CRUMBLE_DELAY);
+      expect(platform.broken).toBe(true);
+      expect(state.player.standingOn).toBeNull();
+    });
+
+    it('a vertical platform moves up and down and carries the player', () => {
+      const { state, platform } = landingOn('vertical');
+      platform.baseY = platform.y;
+      platform.omega = 3;
+      run(state, createInput(), 0.3);
+      expect(state.player.standingOn).toBe(platform.id);
+      let low = Infinity;
+      let high = -Infinity;
+      for (let i = 0; i < 180; i++) {
+        update(state, createInput(), DT);
+        low = Math.min(low, platform.y);
+        high = Math.max(high, platform.y);
+        expect(state.player.y).toBeCloseTo(platform.y - PLAYER_HEIGHT);
+      }
+      expect(high - low).toBeGreaterThan(VERTICAL_AMPLITUDE);
+      expect(high - platform.baseY).toBeLessThanOrEqual(VERTICAL_AMPLITUDE + 0.001);
+    });
+
+    it('brings the special platforms of each zone', () => {
+      const kinds = (zone: number) => {
+        const state = createGame(seeded(20 + zone));
+        state.platforms = [];
+        const fromY = state.startY - zone * 10000;
+        fillRange(state, fromY, fromY - 9000);
+        return new Set<string>(state.platforms.map((p) => (p.width === SHORT_PLATFORM_WIDTH ? 'short' : p.kind)));
+      };
+      expect(kinds(0)).toEqual(new Set(['normal', 'moving', 'breaking']));
+      expect(kinds(1).has('vanishing')).toBe(true);
+      expect(kinds(1).has('crumbling')).toBe(false);
+      expect(['crumbling', 'vertical'].every((k) => kinds(2).has(k))).toBe(true);
+      expect(kinds(3).has('short')).toBe(true);
+      expect(kinds(3).has('spiked')).toBe(false);
+      expect(kinds(4).has('spiked')).toBe(true);
+    });
+  });
+
+  describe('spikes', () => {
+    function onSpikes() {
+      const state = emptyGame();
+      const platform = state.platforms[0];
+      platform.kind = 'spiked';
+      state.player.standingOn = null;
+      state.player.y = platform.y - PLAYER_HEIGHT - 10;
+      state.player.vy = 200;
+      return { state, platform };
+    }
+
+    it('landing on spikes costs a heart and bounces off', () => {
+      const { state } = onSpikes();
+      run(state, createInput(), 0.1);
+      expect(state.lives).toBe(MAX_LIVES - 1);
+      expect(state.player.vy).toBeLessThan(0);
+      expect(state.player.standingOn).toBeNull();
+      expect(state.invulnerable).toBeGreaterThan(1.5);
+    });
+
+    it('costs nothing while invulnerable', () => {
+      const { state } = onSpikes();
+      state.invulnerable = 1;
+      run(state, createInput(), 0.1);
+      expect(state.lives).toBe(MAX_LIVES);
+      expect(state.player.vy).toBeLessThan(0);
+    });
+
+    it('is harmless from below', () => {
+      const { state, platform } = onSpikes();
+      state.player.y = platform.y + 30;
+      state.player.vy = -JUMP_VELOCITY;
+      run(state, createInput(), 0.15);
+      expect(state.player.y).toBeLessThan(platform.y);
+      expect(state.lives).toBe(MAX_LIVES);
+    });
+
+    it('with the last heart, spikes end the run', () => {
+      const { state } = onSpikes();
+      state.lives = 1;
+      run(state, createInput(), 3);
+      expect(state.player.hit).toBe(true);
+      expect(state.over).toBe(true);
+    });
+
+    it('never makes the chain need a spike and never sits right above or below its neighbours', () => {
+      let total = 0;
+      for (let zone = 4; zone <= 8; zone++) {
+        const state = createGame(seeded(40 + zone));
+        state.platforms = [];
+        const fromY = state.startY - zone * 10000;
+        fillRange(state, fromY, fromY - 9900);
+        expectClimbable(state.platforms, fromY, fromY - 9900, `zone ${zone + 1}`);
+        const chain = state.platforms.filter(supports).sort((a, b) => a.baseY - b.baseY);
+        const spikes = state.platforms.filter((p) => p.kind === 'spiked');
+        total += spikes.length;
+        for (const spike of spikes) {
+          const above = chain.filter((p) => p.baseY < spike.y).at(-1)!;
+          const below = chain.find((p) => p.baseY > spike.y)!;
+          for (const neighbour of [above, below]) {
+            expect(neighbour.vx).toBe(0);
+            expect(neighbour.kind).not.toBe('vertical');
+            expect(spikeOverlaps(spike.x, neighbour)).toBe(false);
+          }
+        }
+      }
+      expect(total).toBeGreaterThan(3);
+    });
+
+    it('does not appear in the parachute area', () => {
+      const state = createGame(seeded(9));
+      state.player.y = state.startY - 60000; // in operations
+      state.maxHeight = 60000;
+      state.cameraY = state.player.y - VIEW_HEIGHT * 0.4;
+      state.platforms = [];
+      state.chainTopY = state.cameraY - VIEW_HEIGHT; // nothing more above
+      const y = state.cameraY + 100;
+      state.platforms.push({ id: 500, x: 0, y, baseY: y, width: 68, kind: 'normal', vx: 0, dx: 0, spring: false, broken: false, fallVelocity: 0, crumble: -1, phase: 0, omega: 0 });
+      state.player.y = state.cameraY + VIEW_HEIGHT + 1;
+      update(state, createInput(), DT);
+      expect(state.parachute).toBe(true);
+      expect(state.platforms.filter((p) => p.kind === 'spiked')).toHaveLength(0);
+    });
+  });
 });
+
+/** Every gap of the chain (without decoys) is reachable, also when vertical platforms are at their worst. */
+function expectClimbable(platforms: Platform[], fromY: number, toY: number, label: string) {
+  const chain = platforms.filter(supports).sort((a, b) => b.baseY - a.baseY);
+  let lowerTop = fromY;
+  for (const platform of chain) {
+    const highest = platform.kind === 'vertical' ? platform.baseY - VERTICAL_AMPLITUDE : platform.y;
+    expect(lowerTop - highest, label).toBeLessThanOrEqual(MAX_GAP);
+    lowerTop = lowestPoint(platform);
+  }
+  expect(lowerTop - toY, label).toBeLessThanOrEqual(MAX_GAP);
+}

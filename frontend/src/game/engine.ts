@@ -73,7 +73,15 @@ const INTRO_SKIP_TO = INTRO_DURATION - 1;
 /** Screen y at which the player hangs during the descent. */
 const INTRO_HANG = VIEW_HEIGHT * 0.25;
 
-export type PlatformKind = 'normal' | 'moving' | 'breaking' | 'rescue';
+/** Vertical platforms move this far up and down around their base. */
+export const VERTICAL_AMPLITUDE = 30;
+export const SHORT_PLATFORM_WIDTH = 48;
+/** Short moving platforms are this much faster. */
+const SHORT_SPEED_FACTOR = 1.3;
+/** A crumbling platform breaks this long after the first landing. */
+export const CRUMBLE_DELAY = 1;
+
+export type PlatformKind = 'normal' | 'moving' | 'breaking' | 'rescue' | 'vanishing' | 'crumbling' | 'vertical' | 'spiked';
 
 export interface Platform {
   id: number;
@@ -89,6 +97,12 @@ export interface Platform {
   /** Breaking platforms break when landed on and fall down. */
   broken: boolean;
   fallVelocity: number;
+  /** Crumbling platforms: seconds until they break, or -1 before the first landing. */
+  crumble: number;
+  /** Vertical platforms: centre of the movement, phase (rad) and angular speed (rad/s). */
+  baseY: number;
+  phase: number;
+  omega: number;
 }
 
 export interface Monster {
@@ -152,7 +166,9 @@ export type GameEvent =
   /** A monster is about to come into view. */
   | { type: 'monsterNear' }
   | { type: 'kill'; x: number; y: number; points: number; by: 'shot' | 'stomp' }
-  | { type: 'hurt'; cause: 'monster' | 'fall' }
+  | { type: 'hurt'; cause: 'monster' | 'fall' | 'spikes' }
+  /** A vanishing platform carried once and is gone. */
+  | { type: 'vanish' }
   | { type: 'death' }
   | { type: 'parachuteOpen' }
   | { type: 'parachuteLand' }
@@ -199,8 +215,10 @@ export interface GameState {
   over: boolean;
   time: number;
   fireCooldown: number;
-  /** y of the highest platform of the climbable chain generated so far. */
+  /** Lowest point of the highest platform of the climbable chain generated so far. */
   chainTopY: number;
+  /** That platform, for the spike rules. */
+  chainTop: Platform | null;
   /** y of the last monster, keeps monsters at least a screen apart. */
   lastMonsterY: number;
   /** y of the last power-up per kind, for the minimum distance between them. */
@@ -265,6 +283,10 @@ export function createGame(random: () => number = Math.random, options: { intro?
     spring: false,
     broken: false,
     fallVelocity: 0,
+    crumble: -1,
+    baseY: VIEW_HEIGHT - 60,
+    phase: 0,
+    omega: 0,
   };
   const playerY = startPlatform.y - PLAYER_HEIGHT;
   const state: GameState = {
@@ -301,6 +323,7 @@ export function createGame(random: () => number = Math.random, options: { intro?
     time: 0,
     fireCooldown: 0,
     chainTopY: startPlatform.y,
+    chainTop: startPlatform,
     lastMonsterY: 0,
     lastPowerUpY: { heart: Infinity, points: Infinity },
     nextId: 2,
@@ -428,6 +451,17 @@ function updateIntro(state: GameState, input: Input, dt: number) {
 
 function movePlatforms(state: GameState, dt: number) {
   for (const platform of state.platforms) {
+    if (platform.crumble > 0) {
+      platform.crumble = Math.max(0, platform.crumble - dt);
+      if (platform.crumble === 0) {
+        platform.broken = true;
+        state.events.push({ type: 'break' });
+      }
+    }
+    if (platform.kind === 'vertical' && !platform.broken) {
+      platform.phase += platform.omega * dt;
+      platform.y = platform.baseY + Math.sin(platform.phase) * VERTICAL_AMPLITUDE;
+    }
     if (platform.broken) {
       platform.fallVelocity += GRAVITY * dt;
       platform.y += platform.fallVelocity * dt;
@@ -481,6 +515,9 @@ function movePlayer(state: GameState, input: Input, dt: number) {
       player.standingOn = null;
       player.vy = -JUMP_VELOCITY;
       state.events.push({ type: 'jump' });
+      if (platform.kind === 'vanishing') {
+        vanish(state, platform);
+      }
     } else {
       player.y = platform.y - PLAYER_HEIGHT;
       player.vy = 0;
@@ -518,16 +555,39 @@ function movePlayer(state: GameState, input: Input, dt: number) {
     return;
   }
   player.y = landing.y - PLAYER_HEIGHT;
+  if (landing.kind === 'spiked') {
+    // Ouch: one heart less (unless invulnerable), but the player bounces off as usual.
+    if (state.invulnerable === 0) {
+      loseHeart(state, 'spikes');
+      if (player.hit) {
+        return;
+      }
+    }
+    player.vy = -JUMP_VELOCITY;
+    return;
+  }
+  if (landing.kind === 'crumbling' && landing.crumble < 0) {
+    landing.crumble = CRUMBLE_DELAY;
+  }
   if (landing.spring) {
     player.vy = -SPRING_VELOCITY;
     state.events.push({ type: 'spring' });
   } else if (input.jump) {
     player.vy = -JUMP_VELOCITY;
     state.events.push({ type: 'jump' });
+    if (landing.kind === 'vanishing') {
+      vanish(state, landing);
+    }
   } else {
     player.vy = 0;
     player.standingOn = landing.id;
   }
+}
+
+/** A vanishing platform carries exactly once: it is gone as soon as the player jumps off. */
+function vanish(state: GameState, platform: Platform) {
+  state.platforms = state.platforms.filter((p) => p !== platform);
+  state.events.push({ type: 'vanish' });
 }
 
 function wrap(player: Player) {
@@ -563,8 +623,8 @@ function fellOff(state: GameState) {
   player.vy = PARACHUTE_SPEED;
 
   // The way back up: the platforms below the old screen were removed, fill the gap again.
-  const lowest = Math.max(...state.platforms.filter((p) => p.kind !== 'breaking' && p !== rescue && p.y < oldBottom + 100).map((p) => p.y));
-  fillRange(state, rescue.y, Number.isFinite(lowest) ? lowest : Math.max(state.chainTopY, state.cameraY - VIEW_HEIGHT));
+  const lowest = Math.max(...state.platforms.filter((p) => supports(p) && p !== rescue && p.y < oldBottom + 100).map(lowestPoint));
+  fillRange(state, rescue.y, Number.isFinite(lowest) ? lowest : Math.max(state.chainTopY, state.cameraY - VIEW_HEIGHT), rescue);
 }
 
 /** Sinking slowly on the parachute; steerable, but no jumping and no shooting. */
@@ -624,8 +684,21 @@ function moveMonsters(state: GameState, previousPlayerY: number) {
 /** Touched a monster from the side or below: one heart less; the monster stays. */
 function hurt(state: GameState, monster: Monster) {
   const player = state.player;
+  loseHeart(state, 'monster');
+  if (player.hit) {
+    return;
+  }
+  // Short knockback: a hop away from the monster.
+  const away = player.x + PLAYER_WIDTH / 2 < monster.x + MONSTER_WIDTH / 2 ? -1 : 1;
+  player.vx = away * KNOCKBACK_SPEED;
+  player.vy = -KNOCKBACK_HOP;
+}
+
+/** One heart less and 2 s of blinking invulnerability; with the last heart the player dies. */
+function loseHeart(state: GameState, cause: 'monster' | 'spikes') {
+  const player = state.player;
   state.lives--;
-  state.events.push({ type: 'hurt', cause: 'monster' });
+  state.events.push({ type: 'hurt', cause });
   player.standingOn = null;
   if (state.lives === 0) {
     player.hit = true;
@@ -633,10 +706,6 @@ function hurt(state: GameState, monster: Monster) {
     state.events.push({ type: 'death' });
     return;
   }
-  // Short knockback: a hop away from the monster, then 2 s of blinking invulnerability.
-  const away = player.x + PLAYER_WIDTH / 2 < monster.x + MONSTER_WIDTH / 2 ? -1 : 1;
-  player.vx = away * KNOCKBACK_SPEED;
-  player.vy = -KNOCKBACK_HOP;
   state.invulnerable = HURT_INVULNERABILITY;
 }
 
@@ -683,19 +752,37 @@ function overlaps(ax: number, ay: number, aw: number, ah: number, bx: number, by
 /** Fills the area up to one screen above the camera with platforms (and the odd monster or power-up). */
 function generatePlatforms(state: GameState) {
   while (state.chainTopY > state.cameraY - VIEW_HEIGHT) {
-    state.chainTopY = addChainPlatform(state, state.chainTopY, true);
+    const link = addChainPlatform(state, { y: state.chainTopY, platform: state.chainTop }, true);
+    state.chainTopY = link.y;
+    state.chainTop = link.platform;
   }
 }
 
 /**
- * Fills a height range with a climbable chain from `fromY` up to the platform at `toY`, without
- * monsters, e.g. the way back up from the rescue platform.
+ * Fills a height range with a climbable chain from `fromY` (the platform `below`, if known) up to the
+ * platform at `toY`, without monsters, e.g. the way back up from the rescue platform.
  */
-export function fillRange(state: GameState, fromY: number, toY: number) {
-  let y = fromY;
-  while (y - toY > gapRange(state.startY - y).max) {
-    y = addChainPlatform(state, y, false, toY);
+export function fillRange(state: GameState, fromY: number, toY: number, below: Platform | null = null) {
+  let link: ChainLink = { y: fromY, platform: below };
+  while (link.y - toY > gapRange(state.startY - link.y).max) {
+    link = addChainPlatform(state, link, false, toY);
   }
+}
+
+/** A platform of the climbable chain and its lowest point, from which the next gap is measured. */
+interface ChainLink {
+  y: number;
+  platform: Platform | null;
+}
+
+/** Platforms the player can stand on (at least once). */
+export function supports(platform: Platform): boolean {
+  return platform.kind !== 'breaking' && platform.kind !== 'spiked';
+}
+
+/** Lowest point a platform reaches; vertical platforms move up and down. */
+export function lowestPoint(platform: Platform): number {
+  return platform.kind === 'vertical' ? platform.baseY + VERTICAL_AMPLITUDE : platform.y;
 }
 
 function gapRange(height: number): { min: number; max: number } {
@@ -704,31 +791,51 @@ function gapRange(height: number): { min: number; max: number } {
 }
 
 /**
- * Adds the next platform of the climbable chain above `belowY` and returns its y; with a decoy
- * in between and, if `withMonsters`, now and then a monster. `limitY` keeps the platform below it.
+ * Adds the next platform of the climbable chain above `below`; with a decoy in between and, if
+ * `withMonsters`, now and then a monster. `limitY` keeps the platform below it.
+ * Vanishing and crumbling platforms may be part of the chain: they carry once.
  */
-function addChainPlatform(state: GameState, belowY: number, withMonsters: boolean, limitY = -Infinity): number {
+function addChainPlatform(state: GameState, below: ChainLink, withMonsters: boolean, limitY = -Infinity): ChainLink {
   const random = state.random;
+  const belowY = below.y;
   const height = state.startY - belowY;
   const params = zoneParams(height);
-  const { min, max } = gapRange(height);
+  const zone = ZONES[zoneIndexAtPx(height)];
+  const special = zone.specials.length > 0 && random() < params.specialShare ? zone.specials[Math.floor(random() * zone.specials.length)] : null;
+  const { min } = gapRange(height);
+  // A vertical platform rises by its amplitude, so its base must be that much closer.
+  const max = gapRange(height).max - (special === 'vertical' ? VERTICAL_AMPLITUDE : 0);
   const gap = Math.min(min + random() * (max - min), belowY - limitY - min);
   const y = belowY - Math.max(min, gap);
 
-  const moving = height > 500 && random() < params.movingShare;
-  const platform = newPlatform(state, random() * (WORLD_WIDTH - PLATFORM_WIDTH), y, moving ? 'moving' : 'normal');
-  if (moving) {
-    platform.vx = (random() < 0.5 ? -1 : 1) * params.movingSpeed;
+  const width = special === 'short' ? SHORT_PLATFORM_WIDTH : PLATFORM_WIDTH;
+  const x = random() * (WORLD_WIDTH - width);
+  let platform: Platform;
+  if (special === 'vanishing' || special === 'crumbling') {
+    platform = newPlatform(state, x, y, special);
+  } else if (special === 'vertical') {
+    platform = newPlatform(state, x, y, 'vertical');
+    platform.phase = random() * Math.PI * 2;
+    platform.omega = (params.movingSpeed * 0.6) / VERTICAL_AMPLITUDE;
+    platform.y = y + Math.sin(platform.phase) * VERTICAL_AMPLITUDE;
   } else {
-    platform.spring = random() < params.springChance;
-    maybeAddPowerUp(state, platform);
+    const moving = height > 500 && random() < params.movingShare;
+    platform = newPlatform(state, x, y, moving ? 'moving' : 'normal', width);
+    if (moving) {
+      platform.vx = (random() < 0.5 ? -1 : 1) * params.movingSpeed * (special === 'short' ? SHORT_SPEED_FACTOR : 1);
+    } else {
+      platform.spring = random() < params.springChance;
+      maybeAddPowerUp(state, platform);
+    }
   }
   state.platforms.push(platform);
 
-  // Breaking platforms are decoys between chain platforms, never needed to climb on.
+  // Decoys between chain platforms, never needed to climb on: breaking, or from zone 5 on spiked.
   if (belowY - y > 60 && random() < DECOY_CHANCE) {
     const decoyY = y + (belowY - y) / 2;
-    state.platforms.push(newPlatform(state, random() * (WORLD_WIDTH - PLATFORM_WIDTH), decoyY, 'breaking'));
+    const spiked = zone.params.spikeShare > 0 && withSpikes(state, below.platform) && random() < params.spikeShare;
+    const decoyX = spiked ? spikeX(state, below.platform, platform) : null;
+    state.platforms.push(newPlatform(state, decoyX ?? random() * (WORLD_WIDTH - PLATFORM_WIDTH), decoyY, decoyX !== null ? 'spiked' : 'breaking'));
   }
 
   if (withMonsters && height > MONSTER_START_HEIGHT && state.lastMonsterY - y > VIEW_HEIGHT && random() < params.monsterChance) {
@@ -737,7 +844,34 @@ function addChainPlatform(state: GameState, belowY: number, withMonsters: boolea
     state.monsters.push({ id: state.nextId++, x: baseX, y: monsterY, baseX, phase: random() * Math.PI * 2 });
     state.lastMonsterY = monsterY;
   }
-  return y;
+  return { y: lowestPoint(platform), platform };
+}
+
+/** No spikes in the parachute area (it has no `below` platform from the regular chain). */
+function withSpikes(state: GameState, below: Platform | null): boolean {
+  return below !== null && below.kind !== 'rescue' && !state.parachute;
+}
+
+/**
+ * x of a spiked platform between two chain platforms, or null if there is no fair place: it must
+ * not overlap either neighbour horizontally (with a player's width to spare), otherwise a player
+ * hopping on the platform below would land on the spikes. Next to moving neighbours: no spikes.
+ */
+function spikeX(state: GameState, below: Platform | null, above: Platform): number | null {
+  if (!below || below.vx !== 0 || below.kind === 'vertical' || above.vx !== 0 || above.kind === 'vertical') {
+    return null;
+  }
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const x = state.random() * (WORLD_WIDTH - PLATFORM_WIDTH);
+    if (!spikeOverlaps(x, below) && !spikeOverlaps(x, above)) {
+      return x;
+    }
+  }
+  return null;
+}
+
+export function spikeOverlaps(x: number, neighbour: Platform): boolean {
+  return x - PLAYER_WIDTH < neighbour.x + neighbour.width && x + PLATFORM_WIDTH + PLAYER_WIDTH > neighbour.x;
 }
 
 /** Power-ups float above standing chain platforms, so they can always be reached. */
@@ -769,7 +903,7 @@ function maybeAddPowerUp(state: GameState, platform: Platform) {
 }
 
 function newPlatform(state: GameState, x: number, y: number, kind: PlatformKind, width = PLATFORM_WIDTH): Platform {
-  return { id: state.nextId++, x, y, width, kind, vx: 0, dx: 0, spring: false, broken: false, fallVelocity: 0 };
+  return { id: state.nextId++, x, y, width, kind, vx: 0, dx: 0, spring: false, broken: false, fallVelocity: 0, crumble: -1, baseY: y, phase: 0, omega: 0 };
 }
 
 function removeBelowScreen(state: GameState) {
