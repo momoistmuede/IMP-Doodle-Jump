@@ -1,5 +1,7 @@
 import {
   BULLET_RADIUS,
+  ENEMY_BULLET_HEIGHT,
+  ENEMY_BULLET_WIDTH,
   MONSTER_WIDTH,
   PLATFORM_HEIGHT,
   PLAYER_WIDTH,
@@ -7,6 +9,7 @@ import {
   SHORT_PLATFORM_WIDTH,
   VIEW_HEIGHT,
   WORLD_WIDTH,
+  type EnemyBullet,
   type GameState,
   type Monster,
   type Platform,
@@ -66,6 +69,9 @@ export class Renderer {
     }
     for (const powerUp of state.powerUps) {
       this.drawPowerUp(powerUp, state.time, scale);
+    }
+    for (const bullet of state.enemyBullets) {
+      this.drawEnemyBullet(bullet, state.time);
     }
     ctx.fillStyle = PALETTE.redDark;
     ctx.strokeStyle = PALETTE.ink;
@@ -224,16 +230,62 @@ export class Renderer {
     }
   }
 
+  /**
+   * An imp in the look of its zone; the IMP logo is a layer of its own on the shirt, never mirrored.
+   * Each behaviour moves a little differently.
+   */
   private drawMonster(monster: Monster, time: number, scale: number) {
     const ctx = this.ctx;
-    const bob = Math.sin(time * 6 + monster.phase) * 2;
+    const bob = monster.kind === 'flyer' ? 0 : Math.sin(time * 6 + monster.phase) * 2;
     ctx.save();
     ctx.translate(monster.x + MONSTER_WIDTH / 2, monster.y + bob);
-    // The phone imp wobbles to the ring.
-    ctx.rotate(Math.sin(time * 18 + monster.phase) * 0.06);
-    ctx.translate(-MONSTER_WIDTH / 2, 0);
-    this.sprites.draw(ctx, 'imp-telefon', 0, 0, scale);
-    this.sprites.draw(ctx, 'imp-logo', LOGO_ANCHOR.x, LOGO_ANCHOR.y, scale);
+    switch (monster.kind) {
+      case 'wobbler':
+        ctx.rotate(Math.sin(time * 18 + monster.phase) * 0.06); // wobbling to the ring
+        break;
+      case 'flyer':
+        ctx.rotate(Math.sin(time * 3 + monster.phase) * 0.05);
+        break;
+      case 'chaser': {
+        const pulse = 1 + Math.sin(time * 8) * 0.04; // ticking
+        ctx.scale(pulse, pulse);
+        break;
+      }
+      case 'shooter':
+        break;
+    }
+    ctx.save();
+    if (monster.kind === 'flyer' && monster.vx < 0) {
+      ctx.scale(-1, 1);
+    }
+    this.sprites.drawImp(ctx, monster.skin, -MONSTER_WIDTH / 2, 0, scale);
+    ctx.restore();
+    this.sprites.draw(ctx, 'imp-logo', LOGO_ANCHOR.x - MONSTER_WIDTH / 2, LOGO_ANCHOR.y, scale);
+    ctx.restore();
+  }
+
+  /** An exception thrown by a bug imp: a red box with an exclamation mark. */
+  private drawEnemyBullet(bullet: EnemyBullet, time: number) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(bullet.x + ENEMY_BULLET_WIDTH / 2, bullet.y + ENEMY_BULLET_HEIGHT / 2);
+    ctx.rotate(Math.sin(time * 12 + bullet.id) * 0.25);
+    ctx.fillStyle = PALETTE.red;
+    ctx.strokeStyle = PALETTE.ink;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(-ENEMY_BULLET_WIDTH / 2, -ENEMY_BULLET_HEIGHT / 2, ENEMY_BULLET_WIDTH, ENEMY_BULLET_HEIGHT, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = PALETTE.white;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -4);
+    ctx.lineTo(0, 1.5);
+    ctx.moveTo(0, 4);
+    ctx.lineTo(0, 4.2);
+    ctx.stroke();
     ctx.restore();
   }
 }

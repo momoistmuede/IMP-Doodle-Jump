@@ -1,4 +1,5 @@
 import { DEFAULT_COLORS, recolorSvg, type SkinColors } from './skin';
+import { ZONES, impSkin, type ImpSprite, type MonsterKind } from './zones';
 
 /**
  * SVG sprites from public/sprites. Drawing an SVG every frame is slow, so each sprite is rasterised
@@ -40,48 +41,80 @@ export const SPRITES = {
   parachute: { file: 'parachute.svg', x: -32, y: -50, width: 64, height: 56 },
   heart: { file: 'heart.svg', x: 0, y: 0, width: 24, height: 24 },
   'heart-empty': { file: 'heart-empty.svg', x: 0, y: 0, width: 24, height: 24 },
-  'imp-telefon': { file: 'imp-telefon.svg', x: -6, y: -12, width: 62, height: 56 },
   /** The IMP logo on every imp's shirt, centred on the anchor point. */
   'imp-logo': { file: 'imp-logo-shirt.svg', x: -7, y: -3.5, width: 14, height: 7 },
 } satisfies Record<string, SpriteSpec>;
 
 export type SpriteName = keyof typeof SPRITES;
 
+/** Imp sprites share one box; the zone tints them (body, shade, horns replace these placeholders). */
+const IMP_BOX = { x: -6, y: -12, width: 62, height: 56 };
+const IMP_SPRITES: readonly ImpSprite[] = ['telefon', 'pager', 'flieger', 'feature', 'deadline', 'quartalsziel', 'bug'];
+const IMP_PLACEHOLDERS = { body: '#ff0080', shade: '#800040', horns: '#80ff00' };
+
 export class Sprites {
-  private readonly rasters = new Map<SpriteName, HTMLCanvasElement>();
+  private readonly rasters = new Map<string, HTMLCanvasElement>();
   private scale = 0;
 
-  private constructor(private readonly images: Map<SpriteName, HTMLImageElement>) {}
+  private constructor(
+    private readonly images: Map<string, HTMLImageElement>,
+    private readonly specs: Map<string, SpriteSpec>,
+  ) {}
 
   /** Loads all sprites; player sprites are recoloured with the given skin. */
   static async load(colors: SkinColors = DEFAULT_COLORS): Promise<Sprites> {
-    const entries = await Promise.all(
+    const images = new Map<string, HTMLImageElement>();
+    const specs = new Map<string, SpriteSpec>();
+    await Promise.all(
       (Object.entries(SPRITES) as [SpriteName, SpriteSpec][]).map(async ([name, spec]) => {
-        const response = await fetch(`/sprites/${spec.file}`);
-        if (!response.ok) {
-          throw new Error(`Sprite ${spec.file} nicht ladbar (HTTP ${response.status})`);
-        }
-        const svg = await response.text();
-        return [name, await svgImage(spec.skinned ? recolorSvg(svg, colors) : svg)] as const;
+        const svg = await fetchSvg(spec.file);
+        images.set(name, await svgImage(spec.skinned ? recolorSvg(svg, colors) : svg));
+        specs.set(name, spec);
       }),
     );
-    return new Sprites(new Map(entries));
+    // Every imp look of every zone, e.g. the blue pager imp of operations.
+    const impSvgs = new Map(await Promise.all(IMP_SPRITES.map(async (sprite) => [sprite, await fetchSvg(`imp-${sprite}.svg`)] as const)));
+    await Promise.all(
+      ZONES.flatMap((zone, index) =>
+        (Object.keys(zone.imps) as MonsterKind[]).map(async (kind) => {
+          const look = zone.imps[kind];
+          const svg = impSvgs
+            .get(look.sprite)!
+            .replaceAll(IMP_PLACEHOLDERS.body, look.body[0])
+            .replaceAll(IMP_PLACEHOLDERS.shade, look.body[1])
+            .replaceAll(IMP_PLACEHOLDERS.horns, look.horns);
+          const skin = impSkin(index, kind);
+          images.set(skin, await svgImage(svg));
+          specs.set(skin, { file: `imp-${look.sprite}.svg`, ...IMP_BOX });
+        }),
+      ),
+    );
+    return new Sprites(images, specs);
   }
 
   /** Draws a sprite at world position (x, y); the context is already scaled to world pixels. */
   draw(ctx: CanvasRenderingContext2D, name: SpriteName, x: number, y: number, scale: number) {
-    const spec: SpriteSpec = SPRITES[name];
+    this.drawAny(ctx, name, x, y, scale);
+  }
+
+  /** Draws an imp in the look given by its skin (see zones.ts, impSkin). */
+  drawImp(ctx: CanvasRenderingContext2D, skin: string, x: number, y: number, scale: number) {
+    this.drawAny(ctx, this.specs.has(skin) ? skin : impSkin(0, 'wobbler'), x, y, scale);
+  }
+
+  private drawAny(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, scale: number) {
+    const spec = this.specs.get(name)!;
     ctx.drawImage(this.raster(name, scale), x + spec.x, y + spec.y, spec.width, spec.height);
   }
 
-  private raster(name: SpriteName, scale: number): HTMLCanvasElement {
+  private raster(name: string, scale: number): HTMLCanvasElement {
     if (scale !== this.scale) {
       this.rasters.clear();
       this.scale = scale;
     }
     let canvas = this.rasters.get(name);
     if (!canvas) {
-      const spec: SpriteSpec = SPRITES[name];
+      const spec = this.specs.get(name)!;
       canvas = document.createElement('canvas');
       canvas.width = Math.max(1, Math.ceil(spec.width * scale));
       canvas.height = Math.max(1, Math.ceil(spec.height * scale));
@@ -92,6 +125,14 @@ export class Sprites {
     }
     return canvas;
   }
+}
+
+async function fetchSvg(file: string): Promise<string> {
+  const response = await fetch(`/sprites/${file}`);
+  if (!response.ok) {
+    throw new Error(`Sprite ${file} nicht ladbar (HTTP ${response.status})`);
+  }
+  return response.text();
 }
 
 /** An image of an SVG source; a data: URL is allowed by the CSP (img-src 'self' data:). */

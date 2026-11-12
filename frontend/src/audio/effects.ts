@@ -70,6 +70,12 @@ export const EFFECTS = {
     { wave: 'square', freq: n('B6'), duration: 0.05, volume: 0.22, envelope: 'hold', duty: 0.25 },
     { wave: 'square', freq: n('E7'), duration: 0.25, volume: 0.2, duty: 0.25 },
   ],
+  /** The imps announce themselves before they come into view. */
+  rustle: Array.from({ length: 4 }, (_, i): Tone => ({ wave: 'noise', freq: 5000 - i * 600, duration: 0.07, volume: 0.25, at: i * 0.09 })),
+  tick: Array.from({ length: 4 }, (_, i): Tone => ({ wave: 'square', freq: i % 2 ? 1800 : 1500, duration: 0.02, volume: 0.25, at: i * 0.18 })),
+  buzz: [{ wave: 'saw', freq: 140, duration: 0.6, volume: 0.25, envelope: 'hold', vibrato: { depth: 1.5, rate: 24 } }],
+  /** A bug imp throws an exception. */
+  zapp: [{ wave: 'saw', freq: 1600, to: 200, duration: 0.2, volume: 0.25, vibrato: { depth: 2, rate: 30 } }],
   vanish: [{ wave: 'sine', freq: 300, to: 1100, duration: 0.09, volume: 0.5 }],
   /** Landed on spikes. */
   spike: [
