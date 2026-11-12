@@ -2,6 +2,7 @@ import {
   BULLET_RADIUS,
   ENEMY_BULLET_HEIGHT,
   ENEMY_BULLET_WIDTH,
+  JETPACK_SPUTTER,
   MONSTER_WIDTH,
   PLATFORM_HEIGHT,
   PLAYER_WIDTH,
@@ -177,6 +178,15 @@ export class Renderer {
       ctx.restore();
       return;
     }
+    if (state.jetpack > 0) {
+      // The jetpack hangs on the back (opposite the facing), the flame flickers; it sputters at the end.
+      const back = player.x + PLAYER_WIDTH / 2 - player.facing * 24;
+      const sputtering = state.jetpack < JETPACK_SPUTTER && Math.floor(time * 12) % 2 === 0;
+      if (!sputtering) {
+        drawFlame(ctx, back, player.y + 30, 16 + Math.sin(time * 40) * 4);
+      }
+      this.sprites.draw(ctx, 'jetpack', back - 12, player.y + 6, scale);
+    }
     const pose: SpriteName = player.hit
       ? 'player-dead'
       : player.shootPose > 0
@@ -206,6 +216,9 @@ export class Renderer {
       drawPointsPlaceholder(ctx, powerUp, bob);
     } else {
       this.sprites.draw(ctx, powerUp.kind, powerUp.x, powerUp.y + bob, scale);
+    }
+    if (powerUp.kind === 'jetpack') {
+      drawFlame(ctx, powerUp.x + POWER_UP_SIZE / 2, powerUp.y + bob + 25, 6 + Math.sin(time * 30) * 2);
     }
     ctx.fillStyle = PALETTE.white;
     for (let i = 0; i < 3; i++) {
@@ -288,6 +301,24 @@ export class Renderer {
     ctx.stroke();
     ctx.restore();
   }
+}
+
+/** Jetpack flame: an orange flickering triangle with a yellow core. */
+function drawFlame(ctx: CanvasRenderingContext2D, x: number, top: number, length: number) {
+  ctx.fillStyle = PALETTE.orange;
+  ctx.beginPath();
+  ctx.moveTo(x - 5, top);
+  ctx.lineTo(x + 5, top);
+  ctx.lineTo(x, top + length);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = PALETTE.yellow;
+  ctx.beginPath();
+  ctx.moveTo(x - 2.5, top);
+  ctx.lineTo(x + 2.5, top);
+  ctx.lineTo(x, top + length * 0.6);
+  ctx.closePath();
+  ctx.fill();
 }
 
 function platformSprite(platform: Platform): SpriteName {

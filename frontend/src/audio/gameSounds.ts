@@ -9,8 +9,9 @@ const WARNINGS = [0.45, 0.7, 0.95];
 /** Each behaviour announces itself: phone ring, rustling paper, ticking clock, buzzing bug. */
 const NEAR_SOUNDS: Record<MonsterKind, SoundName> = { wobbler: 'ring', flyer: 'rustle', chaser: 'tick', shooter: 'buzz' };
 
-/** Stops the wind of the intro descent. */
+/** Stop the wind of the intro descent and the jetpack engine. */
 let stopWind = () => {};
+let stopJetpack = () => {};
 
 /** Turns the events of one `update` into sounds (the engine itself stays silent and testable). */
 export function playEventSounds(events: readonly GameEvent[], state: GameState) {
@@ -41,6 +42,18 @@ export function playEventSounds(events: readonly GameEvent[], state: GameState) 
         stopWind();
         sound.play('go');
         sound.playMusic(ZONES[0].track, 0);
+        break;
+      case 'jetpackStart':
+        sound.play('jetpackIgnite');
+        stopJetpack();
+        stopJetpack = sound.play('jetpackLoop');
+        break;
+      case 'jetpackSputter':
+        sound.play('jetpackSputter');
+        break;
+      case 'jetpackEnd':
+        stopJetpack();
+        sound.play('jetpackOff');
         break;
       case 'zoneEnter':
         sound.play('fanfare');

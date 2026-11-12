@@ -39,8 +39,9 @@ describe('synth', () => {
   it('renders every effect', () => {
     for (const [name, tones] of Object.entries(EFFECTS)) {
       const samples = renderTones(tones, RATE);
-      // Effects are short; only the wind lasts as long as the intro.
-      expect(samples.length / RATE, name).toBeLessThan(name === 'wind' ? 11 : 3);
+      // Effects are short; only the intro wind and the jetpack engine last as long as what they accompany.
+      const limit = { wind: 11, jetpackLoop: 4 }[name] ?? 3;
+      expect(samples.length / RATE, name).toBeLessThan(limit);
       expectValidSamples(samples);
     }
   });

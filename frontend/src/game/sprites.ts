@@ -40,6 +40,8 @@ export const SPRITES = {
   spring: { file: 'spring.svg', x: 0, y: 0, width: 16, height: 12 },
   parachute: { file: 'parachute.svg', x: -32, y: -50, width: 64, height: 56 },
   heart: { file: 'heart.svg', x: 0, y: 0, width: 24, height: 24 },
+  /** As a power-up centred in its 24 px box; on the player's back while flying. */
+  jetpack: { file: 'jetpack.svg', x: 3, y: -1, width: 18, height: 26 },
   'heart-empty': { file: 'heart-empty.svg', x: 0, y: 0, width: 24, height: 24 },
   /** The IMP logo on every imp's shirt, centred on the anchor point. */
   'imp-logo': { file: 'imp-logo-shirt.svg', x: -7, y: -3.5, width: 14, height: 7 },
