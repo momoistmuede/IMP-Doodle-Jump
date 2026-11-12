@@ -9,6 +9,7 @@ import { createHud, FONT_FAMILY, updateHud } from '../game/hud';
 import { Renderer } from '../game/render';
 import { Sprites } from '../game/sprites';
 import { PALETTE } from '../game/palette';
+import { sanitizeSkin, skinColors, type Skin } from '../game/skin';
 
 /** Longest simulated step, so a stalled tab does not teleport the player. */
 const MAX_STEP = 1 / 30;
@@ -26,16 +27,19 @@ function loadAssets(): Promise<Sprites> {
 }
 
 interface Props {
+  /** The player's look; the sprites are recoloured once per round. */
+  skin: Skin;
   /** The top 10 for HI and NEXT in the HUD. */
   highscores: Highscore[];
   onGameOver: (score: number) => void;
 }
 
-export function GameScreen({ highscores, onGameOver }: Props) {
+export function GameScreen({ skin, highscores, onGameOver }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const onGameOverRef = useRef(onGameOver);
   onGameOverRef.current = onGameOver;
   const topRef = useRef(highscores.map((h) => h.score));
+  const skinRef = useRef(skin);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -114,15 +118,20 @@ export function GameScreen({ highscores, onGameOver }: Props) {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
-    loadAssets().then(
-      (sprites) => {
-        if (stopped) return;
-        renderer = new Renderer(ctx, sprites);
-        last = performance.now();
-        frame = requestAnimationFrame(loop);
-      },
-      (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
-    );
+    loadAssets()
+      .then(async (sprites) => {
+        await sprites.setSkin(skinColors(skinRef.current));
+        return sprites;
+      })
+      .then(
+        (sprites) => {
+          if (stopped) return;
+          renderer = new Renderer(ctx, sprites, sanitizeSkin(skinRef.current));
+          last = performance.now();
+          frame = requestAnimationFrame(loop);
+        },
+        (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+      );
     return () => {
       stopped = true;
       sound.setMuffled(false);

@@ -7,18 +7,23 @@ Doodle Jump im Browser: Spring-Boot-Backend (Gradle 9, Spring Boot 4, Liquibase,
 **imp@jump – der einzig wahre jumphost.** Arcade-Look: Hintergründe in Pixel-Art, alles andere scharf
 gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md).
 
-1. Startbildschirm mit allen 10 Plätzen der Bestenliste (leere Plätze laden zum Mitmachen ein) →
-   **Leertaste**, **Enter** oder **Play**
-2. Jede Runde beginnt mit einem **Abstieg am Fallschirm** vom Chefsessel bis zum Start (10 s, mit
+1. Startbildschirm mit allen 10 Plätzen der Bestenliste, jeweils mit der Figur des Spielers (leere
+   Plätze laden zum Mitmachen ein) → **Leertaste**, **Enter** oder **Play**
+2. **Name** eingeben (vorausgefüllt mit dem zuletzt benutzten), dann die **Spielfigur gestalten**: Farbe
+   von Körper, T-Shirt und Tentakeln, dazu Hut und Brille (↑ ↓ Zeile, ← → Auswahl, R Zufall, Enter Los).
+   Der Skin wird pro Name gespeichert und beim nächsten Mal vorausgewählt.
+3. Jede Runde beginnt mit einem **Abstieg am Fallschirm** vom Chefsessel bis zum Start (10 s, mit
    **Leertaste**/**Enter** überspringbar).
-3. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
+4. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
    weiterspringen), **F** schießen, **M** Ton an/aus (Lautstärke von Musik und Effekten über das
    Lautsprecher-Symbol auf dem Startbildschirm)
-4. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
+5. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
    unten aus dem Bild fällt, verliert ein Herz und schwebt am **Fallschirm** auf eine Rettungsplattform
-   30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100) und ab 300 m selten ein
-   **Raketenrucksack**: 3 s steil nach oben (etwa 270 m), lenkbar und unverwundbar.
-5. Mit dem letzten Herz ist **Game Over**, dann kann man seinen Namen für die Highscores eintragen.
+   30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100)
+   und ab 300 m selten ein **Raketenrucksack**: 3 s steil nach oben (etwa 270 m), lenkbar und unverwundbar.
+6. Mit dem letzten Herz ist **Game Over**. Der Score wird automatisch unter dem Namen gespeichert (es zählt
+   nur das beste Ergebnis pro Name). **Leertaste** = nochmal mit derselben Figur, außerdem **Spieler
+   wechseln** oder zurück zur **Bestenliste**.
 
 Anzeige im Spiel: der Score groß oben mittig, darunter `HI` (Platz 1) und `NEXT` (der nächste Platz der Top 10,
 den man noch überholen kann). Am linken Rand zeigt der Höhenmeter den Fortschritt in der aktuellen Zone

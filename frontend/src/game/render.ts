@@ -19,6 +19,7 @@ import {
 } from './engine';
 import { drawHud, drawPopups, FONT_FAMILY, type Hud } from './hud';
 import { PALETTE } from './palette';
+import { ACCESSORY_ANCHORS, DEFAULT_SKIN, type Pose, type Skin } from './skin';
 import type { SpriteName, Sprites } from './sprites';
 import { PIXELS_PER_METER, ZONE_HEIGHT_M, ZONES, zoneIndexAt } from './zones';
 
@@ -45,6 +46,8 @@ export class Renderer {
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
     private readonly sprites: Sprites,
+    /** Hat and glasses of the player's skin (the colours are already in the sprites). */
+    private readonly skin: Skin = DEFAULT_SKIN,
   ) {
     this.background = document.createElement('canvas');
     this.background.width = BACKGROUND_WIDTH;
@@ -174,7 +177,7 @@ export class Renderer {
       ctx.translate(player.x + PLAYER_WIDTH / 2, player.y);
       ctx.rotate(Math.sin(time * 2) * 0.08);
       this.sprites.draw(ctx, 'parachute', 0, 0, scale);
-      this.sprites.draw(ctx, 'player-stand', -PLAYER_WIDTH / 2, 0, scale);
+      this.drawFigure('stand', scale);
       ctx.restore();
       return;
     }
@@ -187,25 +190,31 @@ export class Renderer {
       }
       this.sprites.draw(ctx, 'jetpack', back - 12, player.y + 6, scale);
     }
-    const pose: SpriteName = player.hit
-      ? 'player-dead'
-      : player.shootPose > 0
-        ? 'player-shoot'
-        : player.vy < 0
-          ? 'player-jump'
-          : player.vy > 300
-            ? 'player-fall'
-            : 'player-stand';
+    const pose: Pose = player.hit ? 'dead' : player.shootPose > 0 ? 'shoot' : player.vy < 0 ? 'jump' : player.vy > 300 ? 'fall' : 'stand';
     ctx.save();
     ctx.translate(player.x + PLAYER_WIDTH / 2, player.y);
     if (player.hit) {
       ctx.rotate(Math.sin(time * 20) * 0.3);
     }
-    if (player.facing < 0 && pose !== 'player-shoot') {
+    if (player.facing < 0 && pose !== 'shoot') {
       ctx.scale(-1, 1);
     }
-    this.sprites.draw(ctx, pose, -PLAYER_WIDTH / 2, 0, scale);
+    this.drawFigure(pose, scale);
     ctx.restore();
+  }
+
+  /** The figure with glasses and hat at the anchor points of the pose; origin at the top centre. */
+  private drawFigure(pose: Pose, scale: number) {
+    const ctx = this.ctx;
+    const left = -PLAYER_WIDTH / 2;
+    this.sprites.draw(ctx, `player-${pose}`, left, 0, scale);
+    const anchors = ACCESSORY_ANCHORS[pose];
+    if (this.skin.glasses !== 'none') {
+      this.sprites.draw(ctx, `glasses-${this.skin.glasses}` as SpriteName, left + anchors.glasses.x, anchors.glasses.y, scale);
+    }
+    if (this.skin.hat !== 'none') {
+      this.sprites.draw(ctx, `hat-${this.skin.hat}` as SpriteName, left + anchors.hat.x, anchors.hat.y, scale);
+    }
   }
 
   /** Power-ups bob up and down and sparkle, so they stand out on dark backgrounds too. */

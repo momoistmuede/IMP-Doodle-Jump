@@ -7,11 +7,14 @@ const RATE = 22050;
 
 function expectValidSamples(samples: Float32Array) {
   expect(samples.length).toBeGreaterThan(0);
+  // One expect per array, not per sample: the music loops have millions of samples.
   let peak = 0;
+  let finite = true;
   for (const value of samples) {
-    expect(Number.isFinite(value)).toBe(true);
+    finite &&= Number.isFinite(value);
     peak = Math.max(peak, Math.abs(value));
   }
+  expect(finite).toBe(true);
   expect(peak).toBeLessThanOrEqual(1);
   expect(peak).toBeGreaterThan(0.01);
 }

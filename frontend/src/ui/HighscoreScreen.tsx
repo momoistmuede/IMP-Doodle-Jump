@@ -18,6 +18,7 @@ import { sound } from '../audio/sound';
 import { PALETTE } from '../game/palette';
 import { formatScore, TOP_PLACES } from '../game/scoreboard';
 import { Controls } from './Controls';
+import { Figure } from './Figure';
 import { SoundSettings } from './SoundSettings';
 import { Title } from './Title';
 import { blink } from './theme';
@@ -90,7 +91,8 @@ export function HighscoreScreen({ onPlay, lastResult, highscores }: Props) {
                       <TableRow key={index} sx={own ? { animation: `${blink} 1s steps(1) infinite` } : undefined}>
                         <TableCell sx={{ color, width: 88 }}>{ORDINALS[index]}</TableCell>
                         <TableCell sx={{ width: 32, px: 0 }}>
-                          <Silhouette />
+                          {/* The player's figure in their skin; the top 3 hop. */}
+                          <Figure skin={entry?.skin ?? null} size={24} bounce={entry !== null && index < 3 && !!entry.skin} />
                         </TableCell>
                         <TableCell sx={{ color, overflowWrap: 'anywhere' }}>
                           {entry ? (
@@ -126,26 +128,5 @@ export function HighscoreScreen({ onPlay, lastResult, highscores }: Props) {
         </Stack>
       </CardContent>
     </Card>
-  );
-}
-
-/** Placeholder figure in front of a name, until players have a skin. */
-function Silhouette() {
-  return (
-    <Box
-      aria-hidden
-      sx={{
-        width: 24,
-        height: 24,
-        display: 'grid',
-        placeItems: 'center',
-        bgcolor: PALETTE.slate,
-        color: PALETTE.grey,
-        fontSize: 16,
-        borderRadius: '12px 12px 2px 2px',
-      }}
-    >
-      ?
-    </Box>
   );
 }
