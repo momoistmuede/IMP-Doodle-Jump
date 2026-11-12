@@ -1,6 +1,7 @@
 package de.imp.doodlejump.repo;
 
 import de.imp.doodlejump.domain.Highscore;
+import de.imp.doodlejump.domain.TopEntry;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -46,11 +47,17 @@ public class HighscoreRepository {
         .optional();
   }
 
-  /** Ties are ordered by who got there first. */
-  public List<Highscore> findTop(int limit) {
-    return jdbc.sql("SELECT * FROM highscore ORDER BY score DESC, achieved_at, name LIMIT :limit")
+  /** Ties are ordered by who got there first. The skin comes along in the same query. */
+  public List<TopEntry> findTop(int limit) {
+    return jdbc.sql("""
+            SELECT h.*, s.body_color, s.shirt_color, s.tentacle_color, s.hat, s.glasses
+              FROM highscore h
+              LEFT JOIN player_skin s ON s.name = h.name
+             ORDER BY h.score DESC, h.achieved_at, h.name
+             LIMIT :limit
+            """)
         .param("limit", limit)
-        .query(MAPPER)
+        .query((rs, i) -> new TopEntry(MAPPER.mapRow(rs, i), PlayerSkinRepository.MAPPER.mapRow(rs, i)))
         .list();
   }
 

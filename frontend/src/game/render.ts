@@ -1,20 +1,27 @@
 import {
   BULLET_RADIUS,
+  ENEMY_BULLET_HEIGHT,
+  ENEMY_BULLET_WIDTH,
+  JETPACK_SPUTTER,
   MONSTER_WIDTH,
   PLATFORM_HEIGHT,
   PLAYER_WIDTH,
   POWER_UP_SIZE,
+  SHORT_PLATFORM_WIDTH,
   VIEW_HEIGHT,
   WORLD_WIDTH,
+  type EnemyBullet,
   type GameState,
   type Monster,
   type Platform,
   type Player,
   type PowerUp,
 } from './engine';
-import { drawHud, drawPopups, type Hud } from './hud';
+import { drawHud, drawPopups, FONT_FAMILY, type Hud } from './hud';
 import { PALETTE } from './palette';
+import { ACCESSORY_ANCHORS, DEFAULT_SKIN, type Pose, type Skin } from './skin';
 import type { SpriteName, Sprites } from './sprites';
+import { PIXELS_PER_METER, ZONE_HEIGHT_M, ZONES, zoneIndexAt } from './zones';
 
 /**
  * Two layers (see docs/konzept-arcade.md, "Grafik"):
@@ -27,6 +34,8 @@ const BACKGROUND_WIDTH = WORLD_WIDTH / ART_PIXEL;
 const BACKGROUND_HEIGHT = VIEW_HEIGHT / ART_PIXEL;
 /** Spacing of the notepad grid, in art pixels. */
 const GRID = 10;
+/** The background blends into the next zone's over this many metres before the zone boundary. */
+const TRANSITION_M = 20;
 /** Imp shirt: centre of the logo relative to the monster position. */
 const LOGO_ANCHOR = { x: MONSTER_WIDTH / 2, y: 30 };
 
@@ -37,6 +46,8 @@ export class Renderer {
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
     private readonly sprites: Sprites,
+    /** Hat and glasses of the player's skin (the colours are already in the sprites). */
+    private readonly skin: Skin = DEFAULT_SKIN,
   ) {
     this.background = document.createElement('canvas');
     this.background.width = BACKGROUND_WIDTH;
@@ -48,20 +59,23 @@ export class Renderer {
   render(state: GameState, hud: Hud, scale: number) {
     const ctx = this.ctx;
     ctx.setTransform(scale, 0, 0, scale, 0, 0);
-    this.drawBackground(state.cameraY);
+    this.drawBackground(state);
     ctx.imageSmoothingEnabled = false;
     ctx.drawImage(this.background, 0, 0, WORLD_WIDTH, VIEW_HEIGHT);
     ctx.imageSmoothingEnabled = true;
 
     ctx.translate(0, -state.cameraY);
     for (const platform of state.platforms) {
-      this.drawPlatform(platform, scale);
+      this.drawPlatform(platform, state.time, scale);
     }
     for (const monster of state.monsters) {
       this.drawMonster(monster, state.time, scale);
     }
     for (const powerUp of state.powerUps) {
       this.drawPowerUp(powerUp, state.time, scale);
+    }
+    for (const bullet of state.enemyBullets) {
+      this.drawEnemyBullet(bullet, state.time);
     }
     ctx.fillStyle = PALETTE.redDark;
     ctx.strokeStyle = PALETTE.ink;
@@ -89,11 +103,31 @@ export class Renderer {
     drawHud(ctx, hud, state, this.sprites, scale);
   }
 
-  /** The hotline's notepad, in pixel art. Positions are whole art pixels, otherwise slow scrolling flickers. */
-  private drawBackground(cameraY: number) {
+  /**
+   * The zone's background, chosen by the camera height, so it also works during the intro descent.
+   * Until the pixel-art pictures exist, every zone is a flat placeholder colour; only the hotline has
+   * its notepad grid. Before a zone boundary the colours blend over.
+   * Positions are whole art pixels, otherwise slow scrolling flickers.
+   */
+  private drawBackground(state: GameState) {
     const bg = this.backgroundCtx;
-    bg.fillStyle = PALETTE.paper;
+    const meters = (state.startY - (state.cameraY + VIEW_HEIGHT / 2)) / PIXELS_PER_METER;
+    const index = zoneIndexAt(meters);
+    const boundary = (index + 1) * ZONE_HEIGHT_M;
+    const blend = index < ZONES.length - 1 ? Math.min(1, Math.max(0, (meters - (boundary - TRANSITION_M)) / TRANSITION_M)) : 0;
+    const next = ZONES[Math.min(index + 1, ZONES.length - 1)];
+    bg.fillStyle = mixColors(ZONES[index].background, next.background, blend);
     bg.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
+    if (index === 0) {
+      bg.globalAlpha = 1 - blend;
+      this.drawNotepad(state.cameraY);
+      bg.globalAlpha = 1;
+    }
+  }
+
+  /** The hotline's notepad grid. */
+  private drawNotepad(cameraY: number) {
+    const bg = this.backgroundCtx;
     bg.fillStyle = PALETTE.paperLine;
     for (let x = GRID; x < BACKGROUND_WIDTH; x += GRID) {
       bg.fillRect(x, 0, 1, BACKGROUND_HEIGHT);
@@ -108,9 +142,9 @@ export class Renderer {
     bg.fillRect(16, 0, 1, BACKGROUND_HEIGHT);
   }
 
-  private drawPlatform(platform: Platform, scale: number) {
+  private drawPlatform(platform: Platform, time: number, scale: number) {
     const ctx = this.ctx;
-    const sprite: SpriteName = `platform-${platform.kind}`;
+    const sprite = platformSprite(platform);
     if (platform.broken) {
       // Two halves tilting away from each other while falling.
       const tilt = Math.min(0.6, platform.fallVelocity / 1500);
@@ -126,7 +160,9 @@ export class Renderer {
       }
       return;
     }
-    this.sprites.draw(ctx, sprite, platform.x, platform.y, scale);
+    // A crumbling platform shakes before it breaks.
+    const shake = platform.crumble > 0 ? Math.sin(time * 70) * 1.5 : 0;
+    this.sprites.draw(ctx, sprite, platform.x + shake, platform.y, scale);
     if (platform.spring) {
       this.sprites.draw(ctx, 'spring', platform.x + platform.width / 2 - 8, platform.y - 11, scale);
     }
@@ -135,42 +171,64 @@ export class Renderer {
   private drawPlayer(player: Player, state: GameState, scale: number) {
     const ctx = this.ctx;
     const time = state.time;
-    if (state.parachute) {
+    if (state.parachute || state.phase === 'intro') {
       // Swinging gently under the canopy.
       ctx.save();
       ctx.translate(player.x + PLAYER_WIDTH / 2, player.y);
       ctx.rotate(Math.sin(time * 2) * 0.08);
       this.sprites.draw(ctx, 'parachute', 0, 0, scale);
-      this.sprites.draw(ctx, 'player-stand', -PLAYER_WIDTH / 2, 0, scale);
+      this.drawFigure('stand', scale);
       ctx.restore();
       return;
     }
-    const pose: SpriteName = player.hit
-      ? 'player-dead'
-      : player.shootPose > 0
-        ? 'player-shoot'
-        : player.vy < 0
-          ? 'player-jump'
-          : player.vy > 300
-            ? 'player-fall'
-            : 'player-stand';
+    if (state.jetpack > 0) {
+      // The jetpack hangs on the back (opposite the facing), the flame flickers; it sputters at the end.
+      const back = player.x + PLAYER_WIDTH / 2 - player.facing * 24;
+      const sputtering = state.jetpack < JETPACK_SPUTTER && Math.floor(time * 12) % 2 === 0;
+      if (!sputtering) {
+        drawFlame(ctx, back, player.y + 30, 16 + Math.sin(time * 40) * 4);
+      }
+      this.sprites.draw(ctx, 'jetpack', back - 12, player.y + 6, scale);
+    }
+    const pose: Pose = player.hit ? 'dead' : player.shootPose > 0 ? 'shoot' : player.vy < 0 ? 'jump' : player.vy > 300 ? 'fall' : 'stand';
     ctx.save();
     ctx.translate(player.x + PLAYER_WIDTH / 2, player.y);
     if (player.hit) {
       ctx.rotate(Math.sin(time * 20) * 0.3);
     }
-    if (player.facing < 0 && pose !== 'player-shoot') {
+    if (player.facing < 0 && pose !== 'shoot') {
       ctx.scale(-1, 1);
     }
-    this.sprites.draw(ctx, pose, -PLAYER_WIDTH / 2, 0, scale);
+    this.drawFigure(pose, scale);
     ctx.restore();
+  }
+
+  /** The figure with glasses and hat at the anchor points of the pose; origin at the top centre. */
+  private drawFigure(pose: Pose, scale: number) {
+    const ctx = this.ctx;
+    const left = -PLAYER_WIDTH / 2;
+    this.sprites.draw(ctx, `player-${pose}`, left, 0, scale);
+    const anchors = ACCESSORY_ANCHORS[pose];
+    if (this.skin.glasses !== 'none') {
+      this.sprites.draw(ctx, `glasses-${this.skin.glasses}` as SpriteName, left + anchors.glasses.x, anchors.glasses.y, scale);
+    }
+    if (this.skin.hat !== 'none') {
+      this.sprites.draw(ctx, `hat-${this.skin.hat}` as SpriteName, left + anchors.hat.x, anchors.hat.y, scale);
+    }
   }
 
   /** Power-ups bob up and down and sparkle, so they stand out on dark backgrounds too. */
   private drawPowerUp(powerUp: PowerUp, time: number, scale: number) {
     const ctx = this.ctx;
     const bob = Math.sin(time * 4 + powerUp.id) * 3;
-    this.sprites.draw(ctx, powerUp.kind, powerUp.x, powerUp.y + bob, scale);
+    if (powerUp.kind === 'points') {
+      drawPointsPlaceholder(ctx, powerUp, bob);
+    } else {
+      this.sprites.draw(ctx, powerUp.kind, powerUp.x, powerUp.y + bob, scale);
+    }
+    if (powerUp.kind === 'jetpack') {
+      drawFlame(ctx, powerUp.x + POWER_UP_SIZE / 2, powerUp.y + bob + 25, 6 + Math.sin(time * 30) * 2);
+    }
     ctx.fillStyle = PALETTE.white;
     for (let i = 0; i < 3; i++) {
       const t = time * 3 + i * 2.1 + powerUp.id;
@@ -194,16 +252,127 @@ export class Renderer {
     }
   }
 
+  /**
+   * An imp in the look of its zone; the IMP logo is a layer of its own on the shirt, never mirrored.
+   * Each behaviour moves a little differently.
+   */
   private drawMonster(monster: Monster, time: number, scale: number) {
     const ctx = this.ctx;
-    const bob = Math.sin(time * 6 + monster.phase) * 2;
+    const bob = monster.kind === 'flyer' ? 0 : Math.sin(time * 6 + monster.phase) * 2;
     ctx.save();
     ctx.translate(monster.x + MONSTER_WIDTH / 2, monster.y + bob);
-    // The phone imp wobbles to the ring.
-    ctx.rotate(Math.sin(time * 18 + monster.phase) * 0.06);
-    ctx.translate(-MONSTER_WIDTH / 2, 0);
-    this.sprites.draw(ctx, 'imp-telefon', 0, 0, scale);
-    this.sprites.draw(ctx, 'imp-logo', LOGO_ANCHOR.x, LOGO_ANCHOR.y, scale);
+    switch (monster.kind) {
+      case 'wobbler':
+        ctx.rotate(Math.sin(time * 18 + monster.phase) * 0.06); // wobbling to the ring
+        break;
+      case 'flyer':
+        ctx.rotate(Math.sin(time * 3 + monster.phase) * 0.05);
+        break;
+      case 'chaser': {
+        const pulse = 1 + Math.sin(time * 8) * 0.04; // ticking
+        ctx.scale(pulse, pulse);
+        break;
+      }
+      case 'shooter':
+        break;
+    }
+    ctx.save();
+    if (monster.kind === 'flyer' && monster.vx < 0) {
+      ctx.scale(-1, 1);
+    }
+    this.sprites.drawImp(ctx, monster.skin, -MONSTER_WIDTH / 2, 0, scale);
+    ctx.restore();
+    this.sprites.draw(ctx, 'imp-logo', LOGO_ANCHOR.x - MONSTER_WIDTH / 2, LOGO_ANCHOR.y, scale);
     ctx.restore();
   }
+
+  /** An exception thrown by a bug imp: a red box with an exclamation mark. */
+  private drawEnemyBullet(bullet: EnemyBullet, time: number) {
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.translate(bullet.x + ENEMY_BULLET_WIDTH / 2, bullet.y + ENEMY_BULLET_HEIGHT / 2);
+    ctx.rotate(Math.sin(time * 12 + bullet.id) * 0.25);
+    ctx.fillStyle = PALETTE.red;
+    ctx.strokeStyle = PALETTE.ink;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(-ENEMY_BULLET_WIDTH / 2, -ENEMY_BULLET_HEIGHT / 2, ENEMY_BULLET_WIDTH, ENEMY_BULLET_HEIGHT, 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.strokeStyle = PALETTE.white;
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(0, -4);
+    ctx.lineTo(0, 1.5);
+    ctx.moveTo(0, 4);
+    ctx.lineTo(0, 4.2);
+    ctx.stroke();
+    ctx.restore();
+  }
+}
+
+/** Jetpack flame: an orange flickering triangle with a yellow core. */
+function drawFlame(ctx: CanvasRenderingContext2D, x: number, top: number, length: number) {
+  ctx.fillStyle = PALETTE.orange;
+  ctx.beginPath();
+  ctx.moveTo(x - 5, top);
+  ctx.lineTo(x + 5, top);
+  ctx.lineTo(x, top + length);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = PALETTE.yellow;
+  ctx.beginPath();
+  ctx.moveTo(x - 2.5, top);
+  ctx.lineTo(x + 2.5, top);
+  ctx.lineTo(x, top + length * 0.6);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function platformSprite(platform: Platform): SpriteName {
+  if (platform.width === SHORT_PLATFORM_WIDTH) {
+    return platform.kind === 'moving' ? 'platform-moving-short' : 'platform-normal-short';
+  }
+  return `platform-${platform.kind}`;
+}
+
+/**
+ * Placeholder of the points power-up until its zone motif is drawn: a circle in the zone's colour
+ * with the zone number.
+ */
+function drawPointsPlaceholder(ctx: CanvasRenderingContext2D, powerUp: PowerUp, bob: number) {
+  const zone = Math.max(0, ZONES.findIndex((z) => z.pointsSkin === powerUp.skin));
+  const color = ZONES[zone].pointsColor;
+  const cx = powerUp.x + POWER_UP_SIZE / 2;
+  const cy = powerUp.y + POWER_UP_SIZE / 2 + bob;
+  ctx.fillStyle = color;
+  ctx.strokeStyle = PALETTE.black;
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, POWER_UP_SIZE / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.stroke();
+  ctx.font = `16px ${FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = luminance(color) > 0.5 ? PALETTE.black : PALETTE.white;
+  ctx.fillText(String(zone + 1), cx + 1, cy + 1);
+}
+
+/** Linear mix of two #rrggbb colours. */
+function mixColors(a: string, b: string, t: number): string {
+  const ca = parseHex(a);
+  const cb = parseHex(b);
+  const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
+  return `rgb(${mixed.join(',')})`;
+}
+
+function luminance(color: string): number {
+  const [r, g, b] = parseHex(color);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+function parseHex(color: string): [number, number, number] {
+  return [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16)) as [number, number, number];
 }

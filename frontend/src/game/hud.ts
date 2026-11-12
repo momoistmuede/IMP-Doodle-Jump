@@ -1,16 +1,14 @@
-import { heightOf, MAX_LIVES, type GameState } from './engine';
+import { heightOf, JETPACK_DURATION, MAX_LIVES, type GameState } from './engine';
 import { PALETTE } from './palette';
 import { formatScore, hiScore, nextTarget } from './scoreboard';
 import type { Sprites } from './sprites';
-import { ZONE_HEIGHT_M, ZONE_NAMES, zoneIndexAt } from './zones';
+import { PIXELS_PER_METER, ZONE_HEIGHT_M, ZONE_NAMES, zoneIndexAt } from './zones';
 
 /**
  * The arcade HUD, drawn straight onto the canvas: it scales with the game and stays sharp, and React
  * does not re-render on every point. The lower sixth of the screen stays free for touch buttons later.
  */
 export const FONT_FAMILY = '"Press Start 2P"';
-/** 10 px = 1 m, so the metres equal the height points of the score. */
-export const PIXELS_PER_METER = 10;
 
 const POPUP_SECONDS = 0.8;
 const POPUP_RISE = 40;
@@ -24,6 +22,13 @@ const FLASH_SECONDS = 0.3;
 const BURST_SECONDS = 0.6;
 /** The best-height marker appears once the player is this far below it, e.g. after a parachute fall. */
 const BEST_MARKER_DISTANCE = 300;
+
+interface Banner {
+  title: string;
+  subtitle?: string;
+  age: number;
+  duration: number;
+}
 
 interface Particle {
   x: number;
@@ -55,15 +60,22 @@ export interface Hud {
   flash: number;
   /** Pieces of the heart that just burst, in screen coordinates. */
   particles: Particle[];
+  /** Sound switched off (key M): shown as a crossed-out speaker. */
+  muted: boolean;
+  /** Zone banner or GO! in the middle of the screen. */
+  banner: Banner | null;
   time: number;
 }
 
 export function createHud(top: readonly number[]): Hud {
-  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, flash: 0, particles: [], time: 0 };
+  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, flash: 0, particles: [], muted: false, banner: null, time: 0 };
 }
 
-/** Advances the animations and reacts to the events of the last `update`. */
-export function updateHud(hud: Hud, state: GameState, dt: number) {
+/**
+ * Advances the animations and reacts to the events of the last `update`.
+ * Returns true when the player just overtook a place of the top 10.
+ */
+export function updateHud(hud: Hud, state: GameState, dt: number): boolean {
   hud.time += dt;
   hud.pulse = Math.max(0, hud.pulse - dt);
   hud.nextBlink = Math.max(0, hud.nextBlink - dt);
@@ -79,11 +91,28 @@ export function updateHud(hud: Hud, state: GameState, dt: number) {
     particle.y += particle.vy * dt;
   }
   hud.particles = hud.particles.filter((p) => p.age < BURST_SECONDS);
+  if (hud.banner) {
+    hud.banner.age += dt;
+    if (hud.banner.age >= hud.banner.duration) {
+      hud.banner = null;
+    }
+  }
 
   for (const event of state.events) {
     switch (event.type) {
+      case 'zoneEnter':
+        hud.banner = { title: `ZONE ${event.zone + 1}`, subtitle: ZONE_NAMES[event.zone], age: 0, duration: 2 };
+        break;
+      case 'introZone':
+        // On the way down every name stays readable: one second per zone, no fanfare.
+        hud.banner = { title: `ZONE ${event.zone + 1}`, subtitle: ZONE_NAMES[event.zone], age: 0, duration: 1 };
+        break;
+      case 'introLand':
+        hud.banner = { title: 'GO!', age: 0, duration: 1 };
+        break;
       case 'kill':
       case 'heartBonus':
+      case 'points':
         hud.popups.push({ text: `+${event.points}`, x: event.x, y: event.y, age: 0 });
         hud.pulse = PULSE_SECONDS;
         break;
@@ -106,10 +135,12 @@ export function updateHud(hud: Hud, state: GameState, dt: number) {
   }
 
   const next = nextTarget(hud.top, state.score)?.rank ?? null;
-  if (hud.nextRank !== undefined && next !== hud.nextRank) {
+  const overtaken = hud.nextRank !== undefined && next !== hud.nextRank;
+  if (overtaken) {
     hud.nextBlink = NEXT_BLINK_SECONDS;
   }
   hud.nextRank = next;
+  return overtaken;
 }
 
 /** Popups live in the world; call with the camera transform applied. */
@@ -151,6 +182,53 @@ export function drawHud(ctx: CanvasRenderingContext2D, hud: Hud, state: GameStat
 
   drawHearts(ctx, hud, state, sprites, scale);
   drawMeter(ctx, state);
+  drawSpeaker(ctx, hud.muted);
+
+  if (hud.banner) {
+    const { title, subtitle } = hud.banner;
+    text(ctx, title, center, 236, 32, subtitle ? PALETTE.white : PALETTE.yellow, 'center');
+    if (subtitle) {
+      text(ctx, subtitle, center, 276, 16, PALETTE.yellow, 'center');
+    }
+  }
+  if (state.phase === 'intro' && Math.floor(hud.time * 2) % 2 === 0) {
+    text(ctx, 'SPACE > SKIP', center, 560, 8, PALETTE.white, 'center');
+  }
+}
+
+/** Small speaker at the top left; crossed out while the sound is off. */
+function drawSpeaker(ctx: CanvasRenderingContext2D, muted: boolean) {
+  ctx.save();
+  ctx.translate(8, 10);
+  ctx.fillStyle = PALETTE.white;
+  ctx.strokeStyle = PALETTE.ink;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(0, 5);
+  ctx.lineTo(4, 5);
+  ctx.lineTo(9, 1);
+  ctx.lineTo(9, 15);
+  ctx.lineTo(4, 11);
+  ctx.lineTo(0, 11);
+  ctx.closePath();
+  ctx.stroke();
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = muted ? PALETTE.red : PALETTE.white;
+  ctx.beginPath();
+  if (muted) {
+    ctx.moveTo(12, 4);
+    ctx.lineTo(19, 12);
+    ctx.moveTo(19, 4);
+    ctx.lineTo(12, 12);
+  } else {
+    ctx.arc(10, 8, 4, -0.9, 0.9);
+    ctx.moveTo(15.5, 2.5);
+    ctx.arc(10, 8, 8, -0.75, 0.75);
+  }
+  ctx.stroke();
+  ctx.restore();
 }
 
 /** Top left corner of heart `index` (0 = leftmost) at the top right of the screen. */
@@ -169,6 +247,18 @@ function drawHearts(ctx: CanvasRenderingContext2D, hud: Hud, state: GameState, s
     ctx.scale(pulse, pulse);
     sprites.draw(ctx, filled ? 'heart' : 'heart-empty', -HEART_SIZE / 2, -HEART_SIZE / 2, scale * pulse);
     ctx.restore();
+  }
+  // Time left on the jetpack, as a bar under the hearts.
+  if (state.jetpack > 0) {
+    const { x } = heartPosition(0);
+    const width = MAX_LIVES * HEART_SPACING - (HEART_SPACING - HEART_SIZE);
+    ctx.fillStyle = PALETTE.black;
+    ctx.fillRect(x, 38, width, 6);
+    ctx.fillStyle = PALETTE.orange;
+    ctx.fillRect(x, 38, width * (state.jetpack / JETPACK_DURATION), 6);
+    ctx.strokeStyle = PALETTE.white;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(x, 38, width, 6);
   }
   ctx.fillStyle = PALETTE.red;
   for (const particle of hud.particles) {

@@ -2,18 +2,21 @@ import Box from '@mui/material/Box';
 import Typography from '@mui/material/Typography';
 import { useEffect, useRef, useState } from 'react';
 import type { Highscore } from '../api';
+import { playEventSounds } from '../audio/gameSounds';
+import { sound } from '../audio/sound';
 import { createGame, createInput, update, VIEW_HEIGHT, WORLD_WIDTH } from '../game/engine';
 import { createHud, FONT_FAMILY, updateHud } from '../game/hud';
 import { Renderer } from '../game/render';
 import { Sprites } from '../game/sprites';
 import { PALETTE } from '../game/palette';
+import { sanitizeSkin, skinColors, type Skin } from '../game/skin';
 
 /** Longest simulated step, so a stalled tab does not teleport the player. */
 const MAX_STEP = 1 / 30;
 /** Pause between falling off the screen and the game-over screen. */
 const GAME_OVER_DELAY_MS = 600;
 
-const CONTROL_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Space', 'KeyF']);
+const CONTROL_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Space', 'Enter', 'KeyF']);
 
 /** Font and sprites are loaded once; otherwise the first frame would show the fallback font. */
 let assets: Promise<Sprites> | undefined;
@@ -24,28 +27,32 @@ function loadAssets(): Promise<Sprites> {
 }
 
 interface Props {
+  /** The player's look; the sprites are recoloured once per round. */
+  skin: Skin;
   /** The top 10 for HI and NEXT in the HUD. */
   highscores: Highscore[];
   onGameOver: (score: number) => void;
 }
 
-export function GameScreen({ highscores, onGameOver }: Props) {
+export function GameScreen({ skin, highscores, onGameOver }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const onGameOverRef = useRef(onGameOver);
   onGameOverRef.current = onGameOver;
   const topRef = useRef(highscores.map((h) => h.score));
+  const skinRef = useRef(skin);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
-    const state = createGame();
+    const state = createGame(Math.random, { intro: true });
     const input = createInput();
     const hud = createHud(topRef.current);
     let renderer: Renderer | undefined;
     let frame = 0;
     let last = 0;
     let stopped = false;
+    let muffled = false;
     let gameOverTimer: ReturnType<typeof setTimeout> | undefined;
 
     const setKey = (event: KeyboardEvent, down: boolean) => {
@@ -53,6 +60,10 @@ export function GameScreen({ highscores, onGameOver }: Props) {
         return;
       }
       event.preventDefault(); // no page scrolling, no button clicks
+      // Space or Enter skips the intro; only a new key press counts, not the key repeat.
+      if (down && !event.repeat && (event.code === 'Space' || event.code === 'Enter')) {
+        input.skip = true;
+      }
       switch (event.code) {
         case 'ArrowLeft':
           input.left = down;
@@ -77,8 +88,17 @@ export function GameScreen({ highscores, onGameOver }: Props) {
       last = now;
       update(state, input, dt);
       input.fire = false;
-      updateHud(hud, state, dt);
+      input.skip = false;
+      if (updateHud(hud, state, dt)) {
+        sound.play('overtake');
+      }
+      playEventSounds(state.events, state);
       state.events = [];
+      if (state.parachute !== muffled) {
+        muffled = state.parachute;
+        sound.setMuffled(muffled);
+      }
+      hud.muted = sound.current.muted;
 
       // Canvas resolution follows its CSS size and the device pixel ratio.
       const width = Math.round(canvas.clientWidth * devicePixelRatio);
@@ -98,17 +118,23 @@ export function GameScreen({ highscores, onGameOver }: Props) {
     window.addEventListener('keydown', onKeyDown);
     window.addEventListener('keyup', onKeyUp);
     window.addEventListener('blur', onBlur);
-    loadAssets().then(
-      (sprites) => {
-        if (stopped) return;
-        renderer = new Renderer(ctx, sprites);
-        last = performance.now();
-        frame = requestAnimationFrame(loop);
-      },
-      (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
-    );
+    loadAssets()
+      .then(async (sprites) => {
+        await sprites.setSkin(skinColors(skinRef.current));
+        return sprites;
+      })
+      .then(
+        (sprites) => {
+          if (stopped) return;
+          renderer = new Renderer(ctx, sprites, sanitizeSkin(skinRef.current));
+          last = performance.now();
+          frame = requestAnimationFrame(loop);
+        },
+        (e: unknown) => setError(e instanceof Error ? e.message : String(e)),
+      );
     return () => {
       stopped = true;
+      sound.setMuffled(false);
       cancelAnimationFrame(frame);
       clearTimeout(gameOverTimer);
       window.removeEventListener('keydown', onKeyDown);

@@ -7,22 +7,42 @@ Doodle Jump im Browser: Spring-Boot-Backend (Gradle 9, Spring Boot 4, Liquibase,
 **imp@jump – der einzig wahre jumphost.** Arcade-Look: Hintergründe in Pixel-Art, alles andere scharf
 gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md).
 
-1. Startbildschirm mit allen 10 Plätzen der Bestenliste (leere Plätze laden zum Mitmachen ein) →
-   **Leertaste**, **Enter** oder **Play**
-2. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
-   weiterspringen), **F** schießen
-3. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
+1. Startbildschirm mit allen 10 Plätzen der Bestenliste, jeweils mit der Figur des Spielers (leere
+   Plätze laden zum Mitmachen ein) → **Leertaste**, **Enter** oder **Play**
+2. **Name** eingeben (vorausgefüllt mit dem zuletzt benutzten), dann die **Spielfigur gestalten**: Farbe
+   von Körper, T-Shirt und Tentakeln, dazu Hut und Brille (↑ ↓ Zeile, ← → Auswahl, R Zufall, Enter Los).
+   Der Skin wird pro Name gespeichert und beim nächsten Mal vorausgewählt.
+3. Jede Runde beginnt mit einem **Abstieg am Fallschirm** vom Chefsessel bis zum Start (10 s, mit
+   **Leertaste**/**Enter** überspringbar).
+4. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
+   weiterspringen), **F** schießen, **M** Ton an/aus (Lautstärke von Musik und Effekten über das
+   Lautsprecher-Symbol auf dem Startbildschirm)
+5. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
    unten aus dem Bild fällt, verliert ein Herz und schwebt am **Fallschirm** auf eine Rettungsplattform
-   30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100).
-4. Mit dem letzten Herz ist **Game Over**, dann kann man seinen Namen für die Highscores eintragen.
+   30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100)
+   und ab 300 m selten ein **Raketenrucksack**: 3 s steil nach oben (etwa 270 m), lenkbar und unverwundbar.
+6. Mit dem letzten Herz ist **Game Over**. Der Score wird automatisch unter dem Namen gespeichert (es zählt
+   nur das beste Ergebnis pro Name). **Leertaste** = nochmal mit derselben Figur, außerdem **Spieler
+   wechseln** oder zurück zur **Bestenliste**.
 
 Anzeige im Spiel: der Score groß oben mittig, darunter `HI` (Platz 1) und `NEXT` (der nächste Platz der Top 10,
 den man noch überholen kann). Am linken Rand zeigt der Höhenmeter den Fortschritt in der aktuellen Zone
-(10 px = 1 m, je 1000 m eine Zone).
+(10 px = 1 m).
+
+Alle 1000 m beginnt eine neue **Zone**, benannt nach den Abteilungen: Hotline, Professional Service,
+Projektmanagement, Development, Operations, Vertrieb, Produktmanagement und – endlos – der Chefsessel. Jede
+Zone hat eigene Musik und einen eigenen Hintergrund (vorerst eine Platzhalterfarbe) und wird schwerer:
+größere Abstände, mehr bewegte Plattformen, mehr Imps. **Punkte-Fundstücke** bringen +200 (vorerst ein
+farbiger Kreis mit der Zonennummer).
 
 Plattformen: grün = normal, blau = bewegt sich, braun = bricht weg (trägt nicht), Feder = Super-Sprung.
-Ab 150 m tauchen Imps auf: abschießen oder von oben draufspringen. Punkte = Höhe in Metern + 50 pro Imp
-+ Bonuspunkte aus Fundstücken.
+Ab Professional Service: rosa gestrichelt = verschwindet nach einem Sprung; ab Projektmanagement: Stein =
+zerbröselt 1 s nach der Landung, gelb = fährt auf und ab; ab Development: kurze, schnellere Plattformen;
+ab Operations: **Stacheln** – wer darauf landet, verliert ein Herz.
+Ab 150 m tauchen **Imps** auf, alle im T-Shirt mit IMP-Logo: abschießen oder von oben draufspringen.
+Telefon-Imps wackeln auf der Stelle (50 Punkte), Flieger-Imps fliegen quer durchs Bild (75), Deadline-Imps
+verfolgen einen und brauchen zwei Schüsse (100), Bug-Imps werfen Exceptions nach unten (150). Ab Operations
+tragen die Imps die Farben ihrer Abteilung. Punkte = Höhe in Metern + Imp-Bonus + Fundstücke.
 
 ## Schnellstart: klonen und ausführen
 
