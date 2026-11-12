@@ -1,9 +1,11 @@
+import { PIXELS_PER_METER, ZONES, zoneIndexAtPx, zoneParams } from './zones';
+
 /**
  * Doodle Jump game logic, independent of rendering and the DOM.
  *
  * World coordinates: x to the right, y downwards (like the canvas). The player climbs towards
  * negative y; `cameraY` is the world y shown at the top edge of the screen. The camera only moves
- * up, except while the player floats down on the parachute.
+ * up, except while the player floats down on the parachute and during the intro.
  * `update` mutates the state in place, once per animation frame.
  */
 
@@ -25,11 +27,12 @@ export const PLATFORM_WIDTH = 68;
 export const PLATFORM_HEIGHT = 14;
 /** Largest vertical distance between two platforms of the climbable chain; well below the jump apex. */
 export const MAX_GAP = 170;
-const MOVING_PLATFORM_SPEED = 90;
 
 export const MONSTER_WIDTH = 50;
 export const MONSTER_HEIGHT = 40;
 const MONSTER_START_HEIGHT = 1500;
+/** Chance of a breaking decoy between two chain platforms. */
+const DECOY_CHANCE = 0.25;
 /** A monster this far above the screen announces itself with a sound. */
 const MONSTER_WARNING_DISTANCE = 150;
 
@@ -60,6 +63,15 @@ export const POWER_UP_SIZE = 24;
 const POWER_UP_HOVER = 36;
 /** A heart at full lives gives points instead. */
 export const HEART_BONUS = 100;
+export const POINTS_BONUS = 200;
+
+/** The intro: floating down on the parachute from the boss's chair to the start (see concept 3.4). */
+export const INTRO_START_M = 7100;
+export const INTRO_DURATION = 10;
+/** Skipping jumps to the last second of the intro. */
+const INTRO_SKIP_TO = INTRO_DURATION - 1;
+/** Screen y at which the player hangs during the descent. */
+const INTRO_HANG = VIEW_HEIGHT * 0.25;
 
 export type PlatformKind = 'normal' | 'moving' | 'breaking' | 'rescue';
 
@@ -95,13 +107,15 @@ export interface Bullet {
   y: number;
 }
 
-export type PowerUpKind = 'heart';
+export type PowerUpKind = 'heart' | 'points';
 
 export interface PowerUp {
   id: number;
   kind: PowerUpKind;
   x: number;
   y: number;
+  /** Motif from the zone the power-up was created in (only 'points'). */
+  skin?: string;
 }
 
 export interface Player {
@@ -125,6 +139,8 @@ export interface Input {
   jump: boolean;
   /** One shot; the caller resets it after `update`. */
   fire: boolean;
+  /** One shot: skips the intro (Space or Enter, without key repeat). */
+  skip: boolean;
 }
 
 /** Something that happened during `update`, for the HUD and the sound; the caller empties `state.events`. */
@@ -141,9 +157,24 @@ export type GameEvent =
   | { type: 'parachuteOpen' }
   | { type: 'parachuteLand' }
   | { type: 'heart' }
-  | { type: 'heartBonus'; x: number; y: number; points: number };
+  | { type: 'heartBonus'; x: number; y: number; points: number }
+  | { type: 'points'; x: number; y: number; points: number }
+  /** Reached a zone for the first time in this round. */
+  | { type: 'zoneEnter'; zone: number }
+  | { type: 'introStart' }
+  /** The intro passes into a zone (descending). */
+  | { type: 'introZone'; zone: number }
+  | { type: 'introLand' };
 
 export interface GameState {
+  /** The round starts with the intro; the player only takes control once it has landed. */
+  phase: 'intro' | 'playing';
+  /** Seconds since the start of the round, while in the intro. */
+  introTime: number;
+  /** Zone the intro currently shows, for its banners. */
+  introZone: number;
+  /** After the intro, the jump key only counts once it has been released. */
+  jumpLocked: boolean;
   player: Player;
   platforms: Platform[];
   monsters: Monster[];
@@ -157,6 +188,8 @@ export interface GameState {
   bonus: number;
   score: number;
   lives: number;
+  /** Highest zone reached in this round (index). */
+  zone: number;
   /** Seconds left in which monsters cannot hurt the player. */
   invulnerable: number;
   /** Floating down to the rescue platform after a fall. */
@@ -204,13 +237,23 @@ const POWER_UPS: Record<PowerUpKind, PowerUpType> = {
       }
     },
   },
+  // The most frequent power-up; its look depends on the zone, the effect does not.
+  points: {
+    chance: () => 0.02,
+    minDistance: 300,
+    minHeight: 0,
+    collect: (state, powerUp) => {
+      state.bonus += POINTS_BONUS;
+      state.events.push({ type: 'points', x: powerUp.x + POWER_UP_SIZE / 2, y: powerUp.y, points: POINTS_BONUS });
+    },
+  },
 };
 
 export function createInput(): Input {
-  return { left: false, right: false, jump: false, fire: false };
+  return { left: false, right: false, jump: false, fire: false, skip: false };
 }
 
-export function createGame(random: () => number = Math.random): GameState {
+export function createGame(random: () => number = Math.random, options: { intro?: boolean } = {}): GameState {
   const startPlatform: Platform = {
     id: 1,
     x: (WORLD_WIDTH - PLATFORM_WIDTH) / 2,
@@ -225,6 +268,10 @@ export function createGame(random: () => number = Math.random): GameState {
   };
   const playerY = startPlatform.y - PLAYER_HEIGHT;
   const state: GameState = {
+    phase: 'playing',
+    introTime: 0,
+    introZone: ZONES.length - 1,
+    jumpLocked: false,
     player: {
       x: (WORLD_WIDTH - PLAYER_WIDTH) / 2,
       y: playerY,
@@ -246,6 +293,7 @@ export function createGame(random: () => number = Math.random): GameState {
     bonus: 0,
     score: 0,
     lives: MAX_LIVES,
+    zone: 0,
     invulnerable: 0,
     parachute: false,
     rescueId: null,
@@ -254,12 +302,18 @@ export function createGame(random: () => number = Math.random): GameState {
     fireCooldown: 0,
     chainTopY: startPlatform.y,
     lastMonsterY: 0,
-    lastPowerUpY: { heart: Infinity },
+    lastPowerUpY: { heart: Infinity, points: Infinity },
     nextId: 2,
     random,
     events: [],
   };
   generatePlatforms(state);
+  if (options.intro) {
+    state.phase = 'intro';
+    state.player.standingOn = null;
+    state.events.push({ type: 'introStart' }, { type: 'introZone', zone: state.introZone });
+    updateIntro(state, createInput(), 0);
+  }
   return state;
 }
 
@@ -268,16 +322,22 @@ export function heightOf(state: GameState): number {
   return state.startY - state.player.y;
 }
 
-/** 0 at the start, 1 from 8000 px on: larger gaps, more moving platforms, more monsters. */
-function difficulty(height: number): number {
-  return Math.min(1, Math.max(0, height) / 8000);
-}
-
 export function update(state: GameState, input: Input, dt: number): void {
   if (state.over) {
     return;
   }
   state.time += dt;
+  if (state.phase === 'intro') {
+    updateIntro(state, input, dt);
+    return;
+  }
+  // After the intro the held jump key does not count until it is released.
+  if (!input.jump) {
+    state.jumpLocked = false;
+  }
+  if (state.jumpLocked) {
+    input = { ...input, jump: false };
+  }
   state.fireCooldown = Math.max(0, state.fireCooldown - dt);
   state.invulnerable = Math.max(0, state.invulnerable - dt);
   const player = state.player;
@@ -310,6 +370,11 @@ export function update(state: GameState, input: Input, dt: number): void {
   if (!player.hit) {
     state.maxHeight = Math.max(state.maxHeight, heightOf(state));
   }
+  const zone = zoneIndexAtPx(state.maxHeight);
+  if (zone > state.zone) {
+    state.zone = zone;
+    state.events.push({ type: 'zoneEnter', zone });
+  }
   state.score = Math.floor(state.maxHeight / PIXELS_PER_POINT) + state.kills * KILL_BONUS + state.bonus;
 
   generatePlatforms(state);
@@ -317,6 +382,47 @@ export function update(state: GameState, input: Input, dt: number): void {
 
   if (!state.parachute && player.y > state.cameraY + VIEW_HEIGHT) {
     fellOff(state);
+  }
+}
+
+/**
+ * The intro: the camera glides from the boss's chair down to the start (ease-in-out), the player
+ * hangs on the parachute. No physics, no input except skipping, no score; the world above the start
+ * area is only generated later while climbing.
+ */
+function updateIntro(state: GameState, input: Input, dt: number) {
+  state.introTime += dt;
+  if (input.skip) {
+    state.introTime = Math.max(state.introTime, INTRO_SKIP_TO);
+  }
+  const player = state.player;
+  const progress = Math.min(1, state.introTime / INTRO_DURATION);
+  const eased = (1 - Math.cos(Math.PI * progress)) / 2;
+  const top = state.startY - INTRO_START_M * PIXELS_PER_METER - INTRO_HANG;
+  state.cameraY = top * (1 - eased);
+  // In the upper part of the screen, above the zone banners; in the last second and a half down to
+  // the start platform.
+  const landing = Math.min(1, Math.max(0, (state.introTime - (INTRO_DURATION - 1.5)) / 1.5));
+  const offset = INTRO_HANG + (state.startY - INTRO_HANG) * landing * landing;
+  player.x = (WORLD_WIDTH - PLAYER_WIDTH) / 2;
+  player.y = state.cameraY + offset;
+  player.vx = 0;
+  player.vy = PARACHUTE_SPEED;
+
+  const zone = zoneIndexAtPx(state.startY - (state.cameraY + VIEW_HEIGHT / 2));
+  if (zone !== state.introZone) {
+    state.introZone = zone;
+    state.events.push({ type: 'introZone', zone });
+  }
+
+  if (state.introTime >= INTRO_DURATION) {
+    state.phase = 'playing';
+    state.cameraY = 0;
+    player.y = state.startY;
+    player.vy = 0;
+    player.standingOn = state.platforms[0].id;
+    state.jumpLocked = input.jump;
+    state.events.push({ type: 'introLand' });
   }
 }
 
@@ -593,8 +699,8 @@ export function fillRange(state: GameState, fromY: number, toY: number) {
 }
 
 function gapRange(height: number): { min: number; max: number } {
-  const d = difficulty(height);
-  return { min: 40 + 50 * d, max: Math.min(MAX_GAP, 90 + 80 * d) };
+  const params = zoneParams(height);
+  return { min: params.minGap, max: Math.min(MAX_GAP, params.maxGap) };
 }
 
 /**
@@ -604,28 +710,28 @@ function gapRange(height: number): { min: number; max: number } {
 function addChainPlatform(state: GameState, belowY: number, withMonsters: boolean, limitY = -Infinity): number {
   const random = state.random;
   const height = state.startY - belowY;
-  const d = difficulty(height);
+  const params = zoneParams(height);
   const { min, max } = gapRange(height);
   const gap = Math.min(min + random() * (max - min), belowY - limitY - min);
   const y = belowY - Math.max(min, gap);
 
-  const moving = height > 500 && random() < 0.1 + 0.3 * d;
+  const moving = height > 500 && random() < params.movingShare;
   const platform = newPlatform(state, random() * (WORLD_WIDTH - PLATFORM_WIDTH), y, moving ? 'moving' : 'normal');
   if (moving) {
-    platform.vx = (random() < 0.5 ? -1 : 1) * MOVING_PLATFORM_SPEED * (1 + d);
+    platform.vx = (random() < 0.5 ? -1 : 1) * params.movingSpeed;
   } else {
-    platform.spring = random() < 0.06;
+    platform.spring = random() < params.springChance;
     maybeAddPowerUp(state, platform);
   }
   state.platforms.push(platform);
 
   // Breaking platforms are decoys between chain platforms, never needed to climb on.
-  if (belowY - y > 60 && random() < 0.15 + 0.2 * d) {
+  if (belowY - y > 60 && random() < DECOY_CHANCE) {
     const decoyY = y + (belowY - y) / 2;
     state.platforms.push(newPlatform(state, random() * (WORLD_WIDTH - PLATFORM_WIDTH), decoyY, 'breaking'));
   }
 
-  if (withMonsters && height > MONSTER_START_HEIGHT && state.lastMonsterY - y > VIEW_HEIGHT && random() < 0.08 + 0.1 * d) {
+  if (withMonsters && height > MONSTER_START_HEIGHT && state.lastMonsterY - y > VIEW_HEIGHT && random() < params.monsterChance) {
     const monsterY = y - MONSTER_HEIGHT - 30;
     const baseX = 30 + random() * (WORLD_WIDTH - MONSTER_WIDTH - 60);
     state.monsters.push({ id: state.nextId++, x: baseX, y: monsterY, baseX, phase: random() * Math.PI * 2 });
@@ -652,6 +758,9 @@ function maybeAddPowerUp(state: GameState, platform: Platform) {
         x: platform.x + platform.width / 2 - POWER_UP_SIZE / 2,
         y: platform.y - POWER_UP_HOVER - POWER_UP_SIZE / 2,
       };
+      if (kind === 'points') {
+        powerUp.skin = ZONES[zoneIndexAtPx(height)].pointsSkin;
+      }
       state.powerUps.push(powerUp);
       state.lastPowerUpY[kind] = platform.y;
       return; // at most one per platform

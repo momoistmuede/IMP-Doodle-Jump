@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   BULLET_SPEED,
+  fillRange,
+  INTRO_DURATION,
+  INTRO_START_M,
+  POINTS_BONUS,
   HEART_BONUS,
   HURT_INVULNERABILITY,
   LANDING_INVULNERABILITY,
@@ -300,7 +304,7 @@ describe('engine', () => {
           state.player.y = state.cameraY + VIEW_HEIGHT * 0.3;
           state.player.vy = -JUMP_VELOCITY * 2;
           update(state, createInput(), DT);
-          for (const h of state.powerUps) {
+          for (const h of state.powerUps.filter((p) => p.kind === 'heart')) {
             if (!hearts.has(h.id)) {
               hearts.add(h.id);
               ys.push(h.y);
@@ -320,13 +324,14 @@ describe('engine', () => {
     it('a heart floats reachable above its platform', () => {
       const state = createGame(seeded(11));
       state.lives = 1;
-      for (let i = 0; i < 2000 && state.powerUps.length === 0; i++) {
+      const hearts = () => state.powerUps.filter((p) => p.kind === 'heart');
+      for (let i = 0; i < 2000 && hearts().length === 0; i++) {
         state.player.standingOn = null;
         state.player.y = state.cameraY + VIEW_HEIGHT * 0.3;
         state.player.vy = -JUMP_VELOCITY;
         update(state, createInput(), DT);
       }
-      const heart = state.powerUps[0];
+      const heart = hearts()[0];
       const below = state.platforms.find(
         (p) => p.x <= heart.x && heart.x + POWER_UP_SIZE <= p.x + p.width && p.y > heart.y && p.y - heart.y < 100,
       );
@@ -388,6 +393,125 @@ describe('engine', () => {
       state.events = [];
       update(state, createInput(), DT);
       expect(state.events).toEqual([]);
+    });
+  });
+
+  describe('zones', () => {
+    it('keeps the chain climbable in every zone and at the cap', () => {
+      for (let zone = 0; zone <= 8; zone++) {
+        const state = createGame(seeded(zone + 1));
+        state.platforms = [];
+        const fromY = state.startY - zone * 10000;
+        const toY = fromY - 4000;
+        fillRange(state, fromY, toY);
+        const ys = [fromY, toY, ...state.platforms.filter((p) => p.kind !== 'breaking').map((p) => p.y)].sort((a, b) => a - b);
+        for (let i = 1; i < ys.length; i++) {
+          expect(ys[i] - ys[i - 1], `zone ${zone + 1}`).toBeLessThanOrEqual(MAX_GAP);
+        }
+      }
+    });
+
+    it('reports every new zone once', () => {
+      const state = emptyGame();
+      state.player.standingOn = null;
+      state.player.y = state.startY - 10050; // 1005 m
+      state.player.vy = -100;
+      update(state, createInput(), DT);
+      expect(state.events).toContainEqual({ type: 'zoneEnter', zone: 1 });
+      expect(state.zone).toBe(1);
+      state.events = [];
+      update(state, createInput(), DT);
+      expect(state.events.filter((e) => e.type === 'zoneEnter')).toHaveLength(0);
+    });
+
+    it('collects the points power-up: +200, whatever the zone', () => {
+      const state = emptyGame();
+      const p = state.player;
+      state.powerUps.push({ id: 900, kind: 'points', x: p.x, y: p.y, skin: 'milestone' });
+      update(state, createInput(), DT);
+      expect(state.bonus).toBe(POINTS_BONUS);
+      expect(state.score).toBe(POINTS_BONUS);
+      expect(state.events.some((e) => e.type === 'points')).toBe(true);
+    });
+
+    it('gives the points power-up the motif of its zone', () => {
+      const state = createGame(seeded(5));
+      state.platforms = [];
+      state.powerUps = [];
+      const fromY = state.startY - 2000 * 10 - 100; // zone 3, project management
+      fillRange(state, fromY, fromY - 60000);
+      const skins = new Set(state.powerUps.filter((p) => p.kind === 'points').map((p) => p.skin));
+      expect(skins.size).toBeGreaterThan(0);
+      expect([...skins].every((skin) => skin === 'milestone' || skin === 'green-build' || skin === 'uptime' || skin === 'contract' || skin === 'idea' || skin === 'bonus-check')).toBe(true);
+      expect(skins.has('milestone')).toBe(true);
+    });
+  });
+
+  describe('intro', () => {
+    function introGame() {
+      return createGame(seeded(2), { intro: true });
+    }
+
+    it('starts high up in the boss chair, on the parachute', () => {
+      const state = introGame();
+      expect(state.phase).toBe('intro');
+      expect((state.startY - state.player.y) / 10).toBeCloseTo(INTRO_START_M, -1);
+      expect(state.events).toContainEqual({ type: 'introStart' });
+      expect(state.events).toContainEqual({ type: 'introZone', zone: 7 });
+    });
+
+    it('lands on the start platform after the intro without points', () => {
+      const state = introGame();
+      state.events = [];
+      const zones: number[] = [];
+      for (let t = 0; t < INTRO_DURATION + 0.1; t += DT) {
+        update(state, createInput(), DT);
+        zones.push(...state.events.flatMap((e) => (e.type === 'introZone' ? [e.zone] : [])));
+        state.events = [];
+      }
+      expect(state.phase).toBe('playing');
+      expect(state.cameraY).toBe(0);
+      expect(state.score).toBe(0);
+      expect(state.maxHeight).toBe(0);
+      expect(state.player.standingOn).toBe(state.platforms[0].id);
+      expect(zones).toEqual([6, 5, 4, 3, 2, 1, 0]);
+    });
+
+    it('ignores all input but skipping, and generates nothing above the start area', () => {
+      const state = introGame();
+      const platforms = state.platforms.length;
+      const input = createInput();
+      Object.assign(input, { left: true, jump: true, fire: true });
+      run(state, input, 5);
+      expect(state.phase).toBe('intro');
+      expect(state.bullets).toHaveLength(0);
+      expect(state.player.x).toBe((WORLD_WIDTH - PLAYER_WIDTH) / 2);
+      expect(state.platforms).toHaveLength(platforms);
+      expect(state.lives).toBe(MAX_LIVES);
+    });
+
+    it('can be skipped to the last second', () => {
+      const state = introGame();
+      const input = createInput();
+      input.skip = true;
+      update(state, input, DT);
+      expect(state.phase).toBe('intro');
+      run(state, createInput(), 1);
+      expect(state.phase).toBe('playing');
+    });
+
+    it('a jump key held over the landing does not jump until released', () => {
+      const state = introGame();
+      const input = createInput();
+      input.jump = true;
+      run(state, input, INTRO_DURATION + 0.5);
+      expect(state.phase).toBe('playing');
+      expect(state.player.standingOn).not.toBeNull();
+      input.jump = false;
+      update(state, input, DT);
+      input.jump = true;
+      update(state, input, DT);
+      expect(state.player.vy).toBeLessThan(0);
     });
   });
 });

@@ -78,11 +78,12 @@ export class SoundManager {
     void this.ctx.resume();
   }
 
-  play(name: SoundName, options: PlayOptions = {}) {
+  /** Plays an effect; returns a function that stops it early (e.g. the wind when the intro is skipped). */
+  play(name: SoundName, options: PlayOptions = {}): () => void {
     const ctx = this.ctx;
     const buffer = this.effectBuffers.get(name);
     if (!ctx || !buffer) {
-      return;
+      return () => {};
     }
     const source = ctx.createBufferSource();
     source.buffer = buffer;
@@ -91,6 +92,10 @@ export class SoundManager {
     gain.gain.value = options.volume ?? 1;
     source.connect(gain).connect(this.effectsGain);
     source.start(ctx.currentTime + (options.delay ?? 0));
+    return () => {
+      gain.gain.setTargetAtTime(0, ctx.currentTime, 0.05);
+      source.stop(ctx.currentTime + 0.3);
+    };
   }
 
   /** Cross-fades to a looping track; does nothing if it is already playing. */

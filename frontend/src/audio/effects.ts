@@ -64,6 +64,31 @@ export const EFFECTS = {
     ...arpeggio(['G5', 'C6', 'E6', 'G6'], 0.05, 'triangle', 0.4),
   ],
   click: [{ wave: 'square', freq: 1200, duration: 0.025, volume: 0.15, duty: 0.25 }],
+  /** Points power-up: a bright double "kling", the same in every zone. */
+  points: [
+    { wave: 'square', freq: n('E6'), duration: 0.05, volume: 0.22, envelope: 'hold', duty: 0.25 },
+    { wave: 'square', freq: n('B6'), duration: 0.05, volume: 0.22, envelope: 'hold', duty: 0.25 },
+    { wave: 'square', freq: n('E7'), duration: 0.25, volume: 0.2, duty: 0.25 },
+  ],
+  /** New zone reached. */
+  fanfare: [
+    ...arpeggio(['G4', 'C5', 'E5'], 0.1, 'square', 0.28, 'hold'),
+    { wave: 'square', freq: n('G5'), duration: 0.3, volume: 0.28, envelope: 'hold' },
+    { wave: 'square', freq: n('E5'), duration: 0.1, volume: 0.28, envelope: 'hold' },
+    { wave: 'square', freq: n('G5'), duration: 0.6, volume: 0.28, vibrato: { depth: 0.3, rate: 7 } },
+    { wave: 'triangle', freq: n('C3'), duration: 1.2, volume: 0.5, at: 0.3, envelope: 'hold' },
+  ],
+  /** Quiet wind during the descent at the start of a round (as long as the intro). */
+  wind: [
+    { wave: 'noise', freq: 900, duration: 5, volume: 0.1, envelope: 'hold' },
+    { wave: 'noise', freq: 600, duration: 5.5, volume: 0.1, envelope: 'hold', at: 4.5 },
+  ],
+  /** Landing after the intro: the round starts. */
+  go: [
+    { wave: 'noise', freq: 700, duration: 0.08, volume: 0.45 },
+    ...arpeggio(['C5', 'G5', 'C6'], 0.06, 'square', 0.25, 'hold'),
+    { wave: 'square', freq: n('G6'), duration: 0.3, volume: 0.25 },
+  ],
 } satisfies Record<string, Tone[]>;
 
 export type SoundName = keyof typeof EFFECTS;

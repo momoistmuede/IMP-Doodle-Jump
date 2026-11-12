@@ -9,17 +9,25 @@ gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md
 
 1. Startbildschirm mit allen 10 Plätzen der Bestenliste (leere Plätze laden zum Mitmachen ein) →
    **Leertaste**, **Enter** oder **Play**
-2. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
+2. Jede Runde beginnt mit einem **Abstieg am Fallschirm** vom Chefsessel bis zum Start (10 s, mit
+   **Leertaste**/**Enter** überspringbar).
+3. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
    weiterspringen), **F** schießen, **M** Ton an/aus (Lautstärke von Musik und Effekten über das
    Lautsprecher-Symbol auf dem Startbildschirm)
-3. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
+4. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
    unten aus dem Bild fällt, verliert ein Herz und schwebt am **Fallschirm** auf eine Rettungsplattform
    30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100).
-4. Mit dem letzten Herz ist **Game Over**, dann kann man seinen Namen für die Highscores eintragen.
+5. Mit dem letzten Herz ist **Game Over**, dann kann man seinen Namen für die Highscores eintragen.
 
 Anzeige im Spiel: der Score groß oben mittig, darunter `HI` (Platz 1) und `NEXT` (der nächste Platz der Top 10,
 den man noch überholen kann). Am linken Rand zeigt der Höhenmeter den Fortschritt in der aktuellen Zone
-(10 px = 1 m, je 1000 m eine Zone).
+(10 px = 1 m).
+
+Alle 1000 m beginnt eine neue **Zone**, benannt nach den Abteilungen: Hotline, Professional Service,
+Projektmanagement, Development, Operations, Vertrieb, Produktmanagement und – endlos – der Chefsessel. Jede
+Zone hat eigene Musik und einen eigenen Hintergrund (vorerst eine Platzhalterfarbe) und wird schwerer:
+größere Abstände, mehr bewegte Plattformen, mehr Imps. **Punkte-Fundstücke** bringen +200 (vorerst ein
+farbiger Kreis mit der Zonennummer).
 
 Plattformen: grün = normal, blau = bewegt sich, braun = bricht weg (trägt nicht), Feder = Super-Sprung.
 Ab 150 m tauchen Imps auf: abschießen oder von oben draufspringen. Punkte = Höhe in Metern + 50 pro Imp

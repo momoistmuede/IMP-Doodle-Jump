@@ -15,7 +15,7 @@ const MAX_STEP = 1 / 30;
 /** Pause between falling off the screen and the game-over screen. */
 const GAME_OVER_DELAY_MS = 600;
 
-const CONTROL_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Space', 'KeyF']);
+const CONTROL_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Space', 'Enter', 'KeyF']);
 
 /** Font and sprites are loaded once; otherwise the first frame would show the fallback font. */
 let assets: Promise<Sprites> | undefined;
@@ -41,7 +41,7 @@ export function GameScreen({ highscores, onGameOver }: Props) {
   useEffect(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
-    const state = createGame();
+    const state = createGame(Math.random, { intro: true });
     const input = createInput();
     const hud = createHud(topRef.current);
     let renderer: Renderer | undefined;
@@ -56,6 +56,10 @@ export function GameScreen({ highscores, onGameOver }: Props) {
         return;
       }
       event.preventDefault(); // no page scrolling, no button clicks
+      // Space or Enter skips the intro; only a new key press counts, not the key repeat.
+      if (down && !event.repeat && (event.code === 'Space' || event.code === 'Enter')) {
+        input.skip = true;
+      }
       switch (event.code) {
         case 'ArrowLeft':
           input.left = down;
@@ -80,6 +84,7 @@ export function GameScreen({ highscores, onGameOver }: Props) {
       last = now;
       update(state, input, dt);
       input.fire = false;
+      input.skip = false;
       if (updateHud(hud, state, dt)) {
         sound.play('overtake');
       }
@@ -113,7 +118,6 @@ export function GameScreen({ highscores, onGameOver }: Props) {
       (sprites) => {
         if (stopped) return;
         renderer = new Renderer(ctx, sprites);
-        sound.playMusic('hotline');
         last = performance.now();
         frame = requestAnimationFrame(loop);
       },
