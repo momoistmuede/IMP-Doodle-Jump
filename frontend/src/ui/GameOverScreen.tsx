@@ -7,8 +7,9 @@ import CardContent from '@mui/material/CardContent';
 import Stack from '@mui/material/Stack';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { MAX_NAME_LENGTH, submitScore, type Highscore, type SubmitResult } from '../api';
+import { sound } from '../audio/sound';
 import { PALETTE } from '../game/palette';
 import { formatScore, placeFor } from '../game/scoreboard';
 import { loadLastName, saveLastName } from './lastName';
@@ -34,11 +35,21 @@ export function GameOverScreen({ score, highscores, onSaved, onSkip, onReplay }:
     score,
   );
 
+  // After the game-over melody: a jingle for a new highscore, then the calm title loop.
+  useEffect(() => {
+    if (place !== null) {
+      sound.play('highscore', { delay: 1.2 });
+    }
+    const timer = setTimeout(() => sound.playMusic('title'), 2500);
+    return () => clearTimeout(timer);
+  }, [place]);
+
   const save = async (event: FormEvent) => {
     event.preventDefault();
     if (!trimmed || saving) {
       return;
     }
+    sound.play('click');
     setSaving(true);
     setError(null);
     try {
@@ -93,7 +104,13 @@ export function GameOverScreen({ score, highscores, onSaved, onSkip, onReplay }:
             <Button onClick={onReplay} startIcon={<ReplayIcon />}>
               Nochmal
             </Button>
-            <Button onClick={onSkip} color="secondary">
+            <Button
+              onClick={() => {
+                sound.play('click');
+                onSkip();
+              }}
+              color="secondary"
+            >
               Ohne Speichern zurück
             </Button>
           </Stack>

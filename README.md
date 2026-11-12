@@ -10,7 +10,8 @@ gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md
 1. Startbildschirm mit allen 10 Plätzen der Bestenliste (leere Plätze laden zum Mitmachen ein) →
    **Leertaste**, **Enter** oder **Play**
 2. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
-   weiterspringen), **F** schießen
+   weiterspringen), **F** schießen, **M** Ton an/aus (Lautstärke von Musik und Effekten über das
+   Lautsprecher-Symbol auf dem Startbildschirm)
 3. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
    unten aus dem Bild fällt, verliert ein Herz und schwebt am **Fallschirm** auf eine Rettungsplattform
    30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100).
