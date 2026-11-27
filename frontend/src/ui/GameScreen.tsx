@@ -20,7 +20,18 @@ const MAX_STEP = 1 / 30;
 /** Pause between falling off the screen and the game-over screen. */
 const GAME_OVER_DELAY_MS = 600;
 
-const CONTROL_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter', 'KeyF']);
+/**
+ * Arrow keys or WASD (by key position, so it works on every keyboard layout). An action is on while
+ * any of its keys is held; up also jumps (in cheat mode it flies up).
+ */
+const HELD_KEYS = {
+  left: ['ArrowLeft', 'KeyA'],
+  right: ['ArrowRight', 'KeyD'],
+  jump: ['Space', 'ArrowUp', 'KeyW'],
+  up: ['ArrowUp', 'KeyW'],
+  down: ['ArrowDown', 'KeyS'],
+} as const;
+const CONTROL_KEYS = new Set([...Object.values(HELD_KEYS).flat(), 'Enter', 'KeyF']);
 
 /** Frame around the playfield, in CSS pixels. */
 const FRAME = 4;
@@ -85,6 +96,8 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
     const tab = tabRef.current!;
     const state = createGame(Math.random, { intro: true });
     const input = createInput();
+    /** Control keys held right now (event.code). */
+    const held = new Set<string>();
     const cheatCode = createCheatCode();
     const hud = createHud(topRef.current);
     let renderer: Renderer | undefined;
@@ -123,26 +136,22 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
       if (down && !event.repeat && (event.code === 'Space' || event.code === 'Enter')) {
         input.skip = true;
       }
-      switch (event.code) {
-        case 'ArrowLeft':
-          input.left = down;
-          break;
-        case 'ArrowRight':
-          input.right = down;
-          break;
-        case 'ArrowUp':
-          input.up = down;
-          break;
-        case 'ArrowDown':
-          input.down = down;
-          break;
-        case 'Space':
-          input.jump = down;
-          break;
-        case 'KeyF':
-          if (down && !event.repeat) input.fire = true;
-          break;
+      if (down) {
+        held.add(event.code);
+      } else {
+        held.delete(event.code);
       }
+      for (const [action, keys] of Object.entries(HELD_KEYS) as [keyof typeof HELD_KEYS, readonly string[]][]) {
+        input[action] = keys.some((key) => held.has(key));
+      }
+      if (event.code === 'KeyF' && down && !event.repeat) {
+        input.fire = true;
+      }
+    };
+    /** Forgets all held keys, e.g. when the window loses focus. */
+    const releaseAll = () => {
+      held.clear();
+      Object.assign(input, createInput());
     };
     const onKeyDown = (event: KeyboardEvent) => {
       // Ü three times: debug mode on or off (see cheatCode.ts).
@@ -152,7 +161,7 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
       setKey(event, true);
     };
     const onKeyUp = (event: KeyboardEvent) => setKey(event, false);
-    const onBlur = () => Object.assign(input, createInput());
+    const onBlur = releaseAll;
 
     const loop = (now: number) => {
       // The first frame's timestamp can lie before `last` (taken with performance.now()): never negative.
@@ -160,7 +169,7 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
       last = now;
       if (pausedRef.current !== hud.paused) {
         hud.paused = pausedRef.current;
-        Object.assign(input, createInput()); // no key stays held across the pause
+        releaseAll(); // no key stays held across the pause
       }
       if (!hud.paused) {
         update(state, input, dt);

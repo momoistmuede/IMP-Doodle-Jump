@@ -14,10 +14,10 @@ gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md
    Der Skin wird pro Name gespeichert und beim nächsten Mal vorausgewählt.
 3. Jede Runde beginnt mit einem **Abstieg am Fallschirm** vom Chefsessel bis zum Start (10 s, mit
    **Leertaste**/**Enter** überspringbar).
-4. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
-   weiterspringen), **F** schießen, **M** Ton an/aus. Lautstärke von Musik und Effekten über das
-   Lautsprecher-Symbol oben links, auf dem Startbildschirm wie im Spiel; im Spiel pausiert die Runde, solange
-   das Menü offen ist (**Esc** schließt es)
+4. Spielen: **← →** oder **A D** bewegen, **Leertaste**, **↑** oder **W** springen (gedrückt halten = nach
+   jeder Landung sofort weiterspringen), **F** schießen, **M** Ton an/aus. Lautstärke von Musik und Effekten
+   über das Lautsprecher-Symbol oben links, auf dem Startbildschirm wie im Spiel; im Spiel pausiert die
+   Runde, solange das Menü offen ist (**Esc** schließt es)
 5. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
    unten aus dem Bild fällt, verliert ein Herz und schwebt am **Fallschirm** auf eine Rettungsplattform
    30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100)
@@ -27,9 +27,10 @@ gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md
    wechseln** oder zurück zur **Bestenliste**.
 
 **Debug-Modus (Cheat):** Im Spiel dreimal hintereinander **Ü** drücken (höchstens 1 s Abstand). Dann
-fliegt die Figur frei: **↑** oder **Leertaste** hoch, **↓** runter, **← →** zur Seite. Sie fliegt durch
-Imps und Exceptions, verliert keine Herzen und kann nicht unten aus dem Bild fallen. Noch einmal dreimal
-**Ü** schaltet ihn wieder aus. Eine Runde, in der der Cheat an war, wird **nicht gespeichert**.
+fliegt die Figur frei: **↑**/**W** oder **Leertaste** hoch, **↓**/**S** runter, **← →** oder **A D** zur
+Seite. Sie fliegt durch Imps und Exceptions, verliert keine Herzen und kann nicht unten aus dem Bild fallen.
+Noch einmal dreimal **Ü** schaltet ihn wieder aus. Eine Runde, in der der Cheat an war, wird **nicht
+gespeichert**.
 
 Anzeige im Spiel: der Score groß in einem Reiter auf der oberen Rahmenkante, darunter `HI` (Platz 1) und `NEXT` (der nächste Platz der Top 10,
 den man noch überholen kann). Am linken Rand zeigt der Höhenmeter den Fortschritt in der aktuellen Zone
