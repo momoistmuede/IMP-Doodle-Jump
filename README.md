@@ -58,6 +58,9 @@ laufen daher unter macOS/Linux, nicht unter Windows.
 
 ### Voraussetzungen
 
+Für den Container-Weg ([Als Container](#als-container-app-und-datenbank)) reichen Git und Podman mit Compose.
+Die Tabelle gilt für die Entwicklung:
+
 | Was | Wofür | Prüfen mit |
 |---|---|---|
 | Git | Klonen | `git --version` |
@@ -84,6 +87,11 @@ cd IMP-Doodle-Jump
 ```
 
 Alle weiteren Befehle laufen im Projektverzeichnis.
+
+> **Nur spielen oder ausliefern, auch unter Windows?** Dann weiter mit
+> [Als Container](#als-container-app-und-datenbank): `make start` (oder `podman compose up -d --build`) baut und
+> startet App und Datenbank im Container, ohne JDK und ohne die Gradle-Tasks. Die Schritte 2 bis 5 hier sind der
+> Schnellstart für die Entwicklung.
 
 ### 2. Datenbank starten (einmalig)
 
