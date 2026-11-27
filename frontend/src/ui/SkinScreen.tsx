@@ -12,6 +12,7 @@ import { useEffect, useState } from 'react';
 import { sound } from '../audio/sound';
 import { PALETTE } from '../game/palette';
 import { DEFAULT_SKIN, GLASSES, HATS, randomSkin, SKIN_COLORS, type Pose, type Skin } from '../game/skin';
+import { KeyLegend, type KeyLegendEntry } from './Controls';
 import { Figure } from './Figure';
 
 type ColorRow = { kind: 'color'; part: 'body' | 'shirt' | 'tentacles'; label: string };
@@ -38,6 +39,14 @@ interface Props {
   onStart: (skin: Skin) => void;
 }
 
+/** Keyboard legend under the editor, in the style of the start screen. */
+const SKIN_KEYS: KeyLegendEntry[] = [
+  { groups: [['↑', '↓']], action: 'Zeile' },
+  { groups: [['←', '→']], action: 'Auswahl' },
+  { groups: [['R']], action: 'Zufall' },
+  { groups: [['Enter'], ['Leertaste']], action: 'Los' },
+];
+
 /** Colours for body, shirt and tentacles plus hat and glasses; keyboard or mouse. */
 export function SkinScreen({ name, initial, returning, onStart }: Props) {
   const [skin, setSkin] = useState(initial);
@@ -54,7 +63,7 @@ export function SkinScreen({ name, initial, returning, onStart }: Props) {
     setSkin(next);
   };
 
-  // ↑ ↓ choose the row, ← → the colour or accessory, Enter or Space = LOS, R = random.
+  // ↑ ↓ choose the row, ← → the colour or accessory, Enter or Space = LOS, R = random (SKIN_KEYS).
   useEffect(() => {
     const step = (current: Skin, index: number, delta: number): Skin => {
       const r = ROWS[index];
@@ -173,9 +182,7 @@ export function SkinScreen({ name, initial, returning, onStart }: Props) {
               ▶ Los ◀
             </Button>
           </Stack>
-          <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center' }}>
-            ↑ ↓ ZEILE · ← → AUSWAHL · R ZUFALL · ENTER LOS
-          </Typography>
+          <KeyLegend entries={SKIN_KEYS} />
         </Stack>
       </CardContent>
     </Card>
