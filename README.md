@@ -163,6 +163,20 @@ podman compose down             # stoppen, die Highscores bleiben im Volume db-d
 podman compose down -v          # stoppen und alle Highscores löschen
 ```
 
+Dieselben Befehle als Kurzform im `Makefile` (`make` zeigt alle, mit Docker: `make start COMPOSE="docker compose"`):
+
+| Befehl | Wirkung |
+|---|---|
+| `make start` | Bauen und starten, wartet bis die App bereit ist. Auch nach Code-Änderungen |
+| `make stop` | Stoppen, die Highscores bleiben erhalten |
+| `make status` / `make logs` | Zustand der Container / Log der App |
+| `make db-create` | Nur die Datenbank starten (beim ersten Mal leer, die Tabellen legt die App an) |
+| `make db-drop` | Alles stoppen und die Datenbank samt Highscores löschen |
+| `make db-recreate` | `db-drop` + `start`: frische, leere Datenbank |
+
+Unter Windows ist `make` nicht vorinstalliert: `winget install ezwinports.make`, oder die `podman compose`-Befehle
+oben direkt verwenden.
+
 Spielen: **https**://localhost:9443. Das Zertifikat ist selbst signiert, der Browser warnt beim ersten Aufruf.
 Die Datenbank ist eine eigene, getrennt von der aus `pods-create`, und von außen nicht erreichbar. Beides kann
 neben `app-start` und dem Postgres-Pod laufen.
