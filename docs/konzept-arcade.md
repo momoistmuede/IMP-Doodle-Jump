@@ -799,7 +799,9 @@ eigenen, kurzen 8-Bit-Retro-Effekt, dazu ein Chiptune-Loop pro Zone (Klangvorgab
 - Browser erlauben Audio erst nach einer Nutzeraktion: Der `AudioContext` wird beim Klick auf **Play**
   (bzw. Leertaste) gestartet.
 - Stumm schalten mit Taste **M**, Lautstärke für Musik und Effekte getrennt, gespeichert in `localStorage`.
-  Ein kleines Lautsprecher-Symbol im HUD zeigt den Zustand.
+  Ein kleines Lautsprecher-Symbol oben links im HUD zeigt den Zustand. Ein Klick darauf öffnet dieselben
+  Ton-Einstellungen wie auf dem Startbildschirm (dort ebenfalls oben links); solange sie offen sind, steht
+  das Spiel still (`PAUSE`), die Musik läuft weiter, damit man die Lautstärke hört.
 - Dateien in `frontend/public/sounds/` und `frontend/public/music/`, Format `.mp3` (läuft in allen
   Browsern). Sie kommen vom eigenen Server, die CSP (`default-src 'self'`) erlaubt das ohne Änderung.
 - Herkunft: Effekte selbst erzeugen mit **jsfxr** (sfxr.me, Ergebnis gehört uns), Musik selbst bauen mit

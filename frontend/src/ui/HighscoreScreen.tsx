@@ -56,7 +56,8 @@ export function HighscoreScreen({ onPlay, lastResult, highscores }: Props) {
 
   return (
     <Card sx={{ width: '100%', maxWidth: 640, position: 'relative' }}>
-      <Box sx={{ position: 'absolute', top: 4, right: 4 }}>
+      {/* Top left, where the game shows its speaker too. */}
+      <Box sx={{ position: 'absolute', top: 4, left: 4 }}>
         <SoundSettings />
       </Box>
       <CardContent>

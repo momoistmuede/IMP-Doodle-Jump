@@ -12,6 +12,7 @@ import { formatScore } from '../game/scoreboard';
 import { Sprites } from '../game/sprites';
 import { PALETTE } from '../game/palette';
 import { sanitizeSkin, skinColors, type Skin } from '../game/skin';
+import { SoundSettings } from './SoundSettings';
 import { ARCADE_FONT } from './theme';
 
 /** Longest simulated step, so a stalled tab does not teleport the player. */
@@ -70,6 +71,8 @@ interface Props {
 export function GameScreen({ skin, highscores, onGameOver }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const tabRef = useRef<HTMLDivElement>(null);
+  /** The sound settings are open: the game stands still (the music keeps playing, to hear the volume). */
+  const pausedRef = useRef(false);
   const onGameOverRef = useRef(onGameOver);
   onGameOverRef.current = onGameOver;
   const topRef = useRef(highscores.map((h) => h.score));
@@ -111,7 +114,8 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
     };
 
     const setKey = (event: KeyboardEvent, down: boolean) => {
-      if (!CONTROL_KEYS.has(event.code)) {
+      // While paused the keys belong to the sound settings (switch, sliders, Esc).
+      if (pausedRef.current || !CONTROL_KEYS.has(event.code)) {
         return;
       }
       event.preventDefault(); // no page scrolling, no button clicks
@@ -142,7 +146,7 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
     };
     const onKeyDown = (event: KeyboardEvent) => {
       // Ü three times: debug mode on or off (see cheatCode.ts).
-      if (!event.repeat && cheatCodeKey(cheatCode, event.key, event.timeStamp)) {
+      if (!pausedRef.current && !event.repeat && cheatCodeKey(cheatCode, event.key, event.timeStamp)) {
         toggleCheat(state);
       }
       setKey(event, true);
@@ -154,17 +158,23 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
       // The first frame's timestamp can lie before `last` (taken with performance.now()): never negative.
       const dt = Math.max(0, Math.min(MAX_STEP, (now - last) / 1000));
       last = now;
-      update(state, input, dt);
-      input.fire = false;
-      input.skip = false;
-      if (updateHud(hud, state, dt)) {
-        sound.play('overtake');
+      if (pausedRef.current !== hud.paused) {
+        hud.paused = pausedRef.current;
+        Object.assign(input, createInput()); // no key stays held across the pause
       }
-      playEventSounds(state.events, state);
-      state.events = [];
-      if (state.parachute !== muffled) {
-        muffled = state.parachute;
-        sound.setMuffled(muffled);
+      if (!hud.paused) {
+        update(state, input, dt);
+        input.fire = false;
+        input.skip = false;
+        if (updateHud(hud, state, dt)) {
+          sound.play('overtake');
+        }
+        playEventSounds(state.events, state);
+        state.events = [];
+        if (state.parachute !== muffled) {
+          muffled = state.parachute;
+          sound.setMuffled(muffled);
+        }
       }
       hud.muted = sound.current.muted;
       updateTab();
@@ -250,6 +260,12 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
           lineHeight: 1,
           whiteSpace: 'nowrap',
         }}
+      />
+      {/* Over the speaker the HUD draws at the top left: opens the sound settings and pauses. */}
+      <SoundSettings
+        overlay
+        onOpenChange={(open) => (pausedRef.current = open)}
+        sx={{ position: 'absolute', left: world(2), top: world(4), width: world(32), height: world(28) }}
       />
       {error && (
         <Typography color="error" sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', p: 2, textAlign: 'center' }}>
