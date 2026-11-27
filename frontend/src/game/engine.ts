@@ -104,6 +104,8 @@ export const SHORT_PLATFORM_WIDTH = 48;
 const SHORT_SPEED_FACTOR = 1.3;
 /** A crumbling platform breaks this long after the first landing. */
 export const CRUMBLE_DELAY = 1;
+/** Horizontal room between a one-time platform and its permanent alternative. */
+const ALTERNATIVE_SPACING = PLAYER_WIDTH;
 
 export type PlatformKind = 'normal' | 'moving' | 'breaking' | 'rescue' | 'vanishing' | 'crumbling' | 'vertical' | 'spiked';
 
@@ -268,10 +270,10 @@ export interface GameState {
   over: boolean;
   time: number;
   fireCooldown: number;
-  /** Lowest point of the highest platform of the climbable chain generated so far. */
+  /** Lowest point of the highest step of the climbable chain generated so far. */
   chainTopY: number;
-  /** That platform, for the spike rules. */
-  chainTop: Platform | null;
+  /** The platforms of that step, for the spike rules. */
+  chainTop: Platform[];
   /** y of the last monster, keeps monsters at least a screen apart. */
   lastMonsterY: number;
   /** y of the last power-up per kind, for the minimum distance between them. */
@@ -392,7 +394,7 @@ export function createGame(random: () => number = Math.random, options: { intro?
     time: 0,
     fireCooldown: 0,
     chainTopY: startPlatform.y,
-    chainTop: startPlatform,
+    chainTop: [startPlatform],
     lastMonsterY: 0,
     lastPowerUpY: { jetpack: Infinity, heart: Infinity, points: Infinity },
     nextId: 2,
@@ -695,7 +697,8 @@ function fellOff(state: GameState) {
   player.vy = PARACHUTE_SPEED;
 
   // The way back up: the platforms below the old screen were removed, fill the gap again.
-  const lowest = Math.max(...state.platforms.filter((p) => supports(p) && p !== rescue && p.y < oldBottom + 100).map(lowestPoint));
+  // Broken platforms fall away and do not count.
+  const lowest = Math.max(...state.platforms.filter((p) => supports(p) && !p.broken && p !== rescue && p.y < oldBottom + 100).map(lowestPoint));
   fillRange(state, rescue.y, Number.isFinite(lowest) ? lowest : Math.max(state.chainTopY, state.cameraY - VIEW_HEIGHT), rescue);
 }
 
@@ -919,9 +922,9 @@ function overlaps(ax: number, ay: number, aw: number, ah: number, bx: number, by
 /** Fills the area up to one screen above the camera with platforms (and the odd monster or power-up). */
 function generatePlatforms(state: GameState) {
   while (state.chainTopY > state.cameraY - VIEW_HEIGHT) {
-    const link = addChainPlatform(state, { y: state.chainTopY, platform: state.chainTop }, true);
+    const link = addChainPlatform(state, { y: state.chainTopY, platforms: state.chainTop }, true);
     state.chainTopY = link.y;
-    state.chainTop = link.platform;
+    state.chainTop = link.platforms;
   }
 }
 
@@ -930,16 +933,19 @@ function generatePlatforms(state: GameState) {
  * platform at `toY`, without monsters, e.g. the way back up from the rescue platform.
  */
 export function fillRange(state: GameState, fromY: number, toY: number, below: Platform | null = null) {
-  let link: ChainLink = { y: fromY, platform: below };
+  let link: ChainLink = { y: fromY, platforms: below ? [below] : [] };
   while (link.y - toY > gapRange(state.startY - link.y).max) {
     link = addChainPlatform(state, link, false, toY);
   }
 }
 
-/** A platform of the climbable chain and its lowest point, from which the next gap is measured. */
+/**
+ * A step of the climbable chain: its platforms (one, or a one-time platform and its permanent
+ * alternative) and its lowest point, from which the next gap is measured.
+ */
 interface ChainLink {
   y: number;
-  platform: Platform | null;
+  platforms: Platform[];
 }
 
 /** Platforms the player can stand on (at least once). */
@@ -958,9 +964,10 @@ function gapRange(height: number): { min: number; max: number } {
 }
 
 /**
- * Adds the next platform of the climbable chain above `below`; with a decoy in between and, if
- * `withMonsters`, now and then a monster. `limitY` keeps the platform below it.
- * Vanishing and crumbling platforms may be part of the chain: they carry once.
+ * Adds the next step of the climbable chain above `below`; with a decoy in between and, if
+ * `withMonsters`, now and then a monster. `limitY` keeps the step below it.
+ * Vanishing and crumbling platforms may be part of the chain, but never alone: they carry only once,
+ * so a permanent platform at the same height stays as the second way up.
  */
 function addChainPlatform(state: GameState, below: ChainLink, withMonsters: boolean, limitY = -Infinity): ChainLink {
   const random = state.random;
@@ -996,12 +1003,16 @@ function addChainPlatform(state: GameState, below: ChainLink, withMonsters: bool
     }
   }
   state.platforms.push(platform);
+  const step = [platform];
+  if (special === 'vanishing' || special === 'crumbling') {
+    step.push(addAlternative(state, platform));
+  }
 
   // Decoys between chain platforms, never needed to climb on: breaking, or from zone 5 on spiked.
   if (belowY - y > 60 && random() < DECOY_CHANCE) {
     const decoyY = y + (belowY - y) / 2;
-    const spiked = zone.params.spikeShare > 0 && withSpikes(state, below.platform) && random() < params.spikeShare;
-    const decoyX = spiked ? spikeX(state, below.platform, platform) : null;
+    const spiked = zone.params.spikeShare > 0 && withSpikes(state, below.platforms) && random() < params.spikeShare;
+    const decoyX = spiked ? spikeX(state, below.platforms, step) : null;
     state.platforms.push(newPlatform(state, decoyX ?? random() * (WORLD_WIDTH - PLATFORM_WIDTH), decoyY, decoyX !== null ? 'spiked' : 'breaking'));
   }
 
@@ -1015,26 +1026,43 @@ function addChainPlatform(state: GameState, below: ChainLink, withMonsters: bool
     state.monsters.push(monster);
     state.lastMonsterY = monster.y;
   }
-  return { y: lowestPoint(platform), platform };
-}
-
-/** No spikes in the parachute area (it has no `below` platform from the regular chain). */
-function withSpikes(state: GameState, below: Platform | null): boolean {
-  return below !== null && below.kind !== 'rescue' && !state.parachute;
+  return { y: lowestPoint(platform), platforms: step };
 }
 
 /**
- * x of a spiked platform between two chain platforms, or null if there is no fair place: it must
- * not overlap either neighbour horizontally (with a player's width to spare), otherwise a player
- * hopping on the platform below would land on the spikes. Next to moving neighbours: no spikes.
+ * The second way up beside a one-time platform: a normal platform at the same height, so it is
+ * just as reachable from below and reaches the next step just as well. It sits beside the one-time
+ * platform with room to spare, so the two read as separate ways.
  */
-function spikeX(state: GameState, below: Platform | null, above: Platform): number | null {
-  if (!below || below.vx !== 0 || below.kind === 'vertical' || above.vx !== 0 || above.kind === 'vertical') {
+function addAlternative(state: GameState, oneTime: Platform): Platform {
+  const leftRoom = Math.max(0, oneTime.x - ALTERNATIVE_SPACING - PLATFORM_WIDTH);
+  const rightStart = oneTime.x + oneTime.width + ALTERNATIVE_SPACING;
+  const rightRoom = Math.max(0, WORLD_WIDTH - PLATFORM_WIDTH - rightStart);
+  const r = state.random() * (leftRoom + rightRoom);
+  const x = r < leftRoom ? r : rightStart + (r - leftRoom);
+  const alternative = newPlatform(state, x, oneTime.y, 'normal');
+  state.platforms.push(alternative);
+  return alternative;
+}
+
+/** No spikes in the parachute area (it has no `below` step from the regular chain). */
+function withSpikes(state: GameState, below: Platform[]): boolean {
+  return below.length > 0 && below.every((p) => p.kind !== 'rescue') && !state.parachute;
+}
+
+/**
+ * x of a spiked platform between two chain steps, or null if there is no fair place: it must not
+ * overlap any neighbour horizontally (with a player's width to spare), otherwise a player hopping on
+ * a platform below would land on the spikes. Next to moving neighbours: no spikes.
+ */
+function spikeX(state: GameState, below: Platform[], above: Platform[]): number | null {
+  const neighbours = [...below, ...above];
+  if (below.length === 0 || neighbours.some((p) => p.vx !== 0 || p.kind === 'vertical')) {
     return null;
   }
   for (let attempt = 0; attempt < 8; attempt++) {
     const x = state.random() * (WORLD_WIDTH - PLATFORM_WIDTH);
-    if (!spikeOverlaps(x, below) && !spikeOverlaps(x, above)) {
+    if (neighbours.every((p) => !spikeOverlaps(x, p))) {
       return x;
     }
   }

@@ -584,6 +584,33 @@ describe('engine', () => {
       expect(high - platform.baseY).toBeLessThanOrEqual(VERTICAL_AMPLITUDE + 0.001);
     });
 
+    it('never makes a one-time platform the only way up: the chain stays climbable without them', () => {
+      const oneTime = (p: Platform) => p.kind === 'vanishing' || p.kind === 'crumbling';
+      let total = 0;
+      for (let zone = 1; zone <= 8; zone++) {
+        const state = createGame(seeded(60 + zone));
+        state.platforms = [];
+        const fromY = state.startY - zone * 10000;
+        const toY = fromY - 9000;
+        fillRange(state, fromY, toY);
+        const used = state.platforms.filter(oneTime);
+        total += used.length;
+        // Used up and fallen back down: what is left must still lead all the way up.
+        expectClimbable(state.platforms.filter((p) => !oneTime(p)), fromY, toY, `zone ${zone + 1}`);
+        for (const platform of used) {
+          const alternative = state.platforms.find((p) => p.kind === 'normal' && p.y === platform.y);
+          expect(alternative, `zone ${zone + 1}`).toBeDefined();
+          const { x, width } = alternative!;
+          // Beside it with a player's width of room, never overlapping, inside the screen.
+          const beside = x >= platform.x + platform.width + PLAYER_WIDTH - 0.001 || x + width + PLAYER_WIDTH <= platform.x + 0.001;
+          expect(beside).toBe(true);
+          expect(x).toBeGreaterThanOrEqual(0);
+          expect(x).toBeLessThanOrEqual(WORLD_WIDTH - PLATFORM_WIDTH);
+        }
+      }
+      expect(total).toBeGreaterThan(20);
+    });
+
     it('brings the special platforms of each zone', () => {
       const kinds = (zone: number) => {
         const state = createGame(seeded(20 + zone));
@@ -659,9 +686,11 @@ describe('engine', () => {
         const spikes = state.platforms.filter((p) => p.kind === 'spiked');
         total += spikes.length;
         for (const spike of spikes) {
-          const above = chain.filter((p) => p.baseY < spike.y).at(-1)!;
-          const below = chain.find((p) => p.baseY > spike.y)!;
-          for (const neighbour of [above, below]) {
+          // Neighbours: every platform of the steps right above and right below (a one-time
+          // platform and its alternative form one step).
+          const aboveY = chain.filter((p) => p.baseY < spike.y).at(-1)!.baseY;
+          const belowY = chain.find((p) => p.baseY > spike.y)!.baseY;
+          for (const neighbour of chain.filter((p) => p.baseY === aboveY || p.baseY === belowY)) {
             expect(neighbour.vx).toBe(0);
             expect(neighbour.kind).not.toBe('vertical');
             expect(spikeOverlaps(spike.x, neighbour)).toBe(false);
@@ -783,8 +812,8 @@ describe('engine', () => {
     });
 
     it('brings the behaviours of each zone with the zone look', () => {
-      const seen = (zone: number) => {
-        const state = createGame(seeded(60 + zone));
+      const seenWith = (zone: number, seed: number) => {
+        const state = createGame(seeded(seed));
         state.monsters = [];
         const all = new Map<number, Monster>();
         for (let i = 0; i < 4000 && all.size < 40; i++) {
@@ -800,6 +829,8 @@ describe('engine', () => {
         }
         return [...all.values()];
       };
+      // One run meets only 4 to 7 monsters, so one kind can be missing by chance: three runs per zone.
+      const seen = (zone: number) => [60, 70, 80].flatMap((seed) => seenWith(zone, seed + zone));
       const zone3 = seen(2);
       expect(new Set(zone3.map((m) => m.kind))).toEqual(new Set(['flyer', 'chaser']));
       expect(zone3.every((m) => m.skin.endsWith('@2'))).toBe(true);
