@@ -63,13 +63,15 @@ export interface Hud {
   particles: Particle[];
   /** Sound switched off (key M): shown as a crossed-out speaker. */
   muted: boolean;
+  /** The sound settings are open and the game stands still. */
+  paused: boolean;
   /** Zone banner or GO! in the middle of the screen. */
   banner: Banner | null;
   time: number;
 }
 
 export function createHud(top: readonly number[]): Hud {
-  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, flash: 0, particles: [], muted: false, banner: null, time: 0 };
+  return { top, popups: [], pulse: 0, nextRank: undefined, nextBlink: 0, flash: 0, particles: [], muted: false, paused: false, banner: null, time: 0 };
 }
 
 /**
@@ -193,12 +195,15 @@ export function drawHud(ctx: CanvasRenderingContext2D, hud: Hud, state: GameStat
       text(ctx, subtitle, center, 276, 16, PALETTE.yellow, 'center');
     }
   }
+  if (hud.paused) {
+    text(ctx, 'PAUSE', center, 300, 32, PALETTE.yellow, 'center');
+  }
   if (state.phase === 'intro' && Math.floor(hud.time * 2) % 2 === 0) {
     text(ctx, 'SPACE > SKIP', center, 560, 8, PALETTE.white, 'center');
   }
 }
 
-/** Small speaker at the top left; crossed out while the sound is off. */
+/** Small speaker at the top left; crossed out while the sound is off. A click on it opens the sound settings (GameScreen). */
 function drawSpeaker(ctx: CanvasRenderingContext2D, muted: boolean) {
   ctx.save();
   ctx.translate(8, 10);

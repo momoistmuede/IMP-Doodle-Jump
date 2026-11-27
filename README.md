@@ -15,8 +15,9 @@ gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md
 3. Jede Runde beginnt mit einem **Abstieg am Fallschirm** vom Chefsessel bis zum Start (10 s, mit
    **Leertaste**/**Enter** überspringbar).
 4. Spielen: **← →** bewegen, **Leertaste** springen (gedrückt halten = nach jeder Landung sofort
-   weiterspringen), **F** schießen, **M** Ton an/aus (Lautstärke von Musik und Effekten über das
-   Lautsprecher-Symbol auf dem Startbildschirm)
+   weiterspringen), **F** schießen, **M** Ton an/aus. Lautstärke von Musik und Effekten über das
+   Lautsprecher-Symbol oben links, auf dem Startbildschirm wie im Spiel; im Spiel pausiert die Runde, solange
+   das Menü offen ist (**Esc** schließt es)
 5. Man hat **3 Herzen**. Ein Imp seitlich oder von unten kostet ein Herz (danach 2 s unverwundbar). Wer
    unten aus dem Bild fällt, verliert ein Herz und schwebt am **Fallschirm** auf eine Rettungsplattform
    30 m tiefer; die Punkte bleiben. Unterwegs liegen **Herzen** zum Einsammeln (bei vollen Herzen +100)
