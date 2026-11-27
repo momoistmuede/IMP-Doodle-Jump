@@ -120,15 +120,16 @@ export type Pose = 'stand' | 'jump' | 'fall' | 'shoot' | 'dead';
 
 /**
  * Where hat and glasses sit for each pose, relative to the player position (facing right): the hat
- * stands on `hat`, the glasses are centred on `glasses`. While shooting the snout points up, so the
- * hat moves aside.
+ * stands on `hat`, turned clockwise by `hat.angle` degrees around that point; the glasses are centred
+ * on `glasses`. While shooting the snout points up out of the top of the head, so the hat sits tilted
+ * on the right side of the head, its brim on the curve.
  */
-export const ACCESSORY_ANCHORS: Record<Pose, { hat: { x: number; y: number }; glasses: { x: number; y: number } }> = {
-  stand: { hat: { x: 20, y: 7 }, glasses: { x: 27, y: 12 } },
-  jump: { hat: { x: 20, y: 7 }, glasses: { x: 27, y: 12 } },
-  fall: { hat: { x: 20, y: 7 }, glasses: { x: 27, y: 12 } },
-  dead: { hat: { x: 20, y: 7 }, glasses: { x: 27, y: 12 } },
-  shoot: { hat: { x: 31, y: 9 }, glasses: { x: 20, y: 13 } },
+export const ACCESSORY_ANCHORS: Record<Pose, { hat: { x: number; y: number; angle: number }; glasses: { x: number; y: number } }> = {
+  stand: { hat: { x: 20, y: 7, angle: 0 }, glasses: { x: 27, y: 12 } },
+  jump: { hat: { x: 20, y: 7, angle: 0 }, glasses: { x: 27, y: 12 } },
+  fall: { hat: { x: 20, y: 7, angle: 0 }, glasses: { x: 27, y: 12 } },
+  dead: { hat: { x: 20, y: 7, angle: 0 }, glasses: { x: 27, y: 12 } },
+  shoot: { hat: { x: 32, y: 8, angle: 40 }, glasses: { x: 20, y: 13 } },
 };
 
 /** Boxes of the accessory sprites relative to their anchor. */
@@ -164,7 +165,8 @@ export function figureSvg(parts: FigureParts, skin: Skin, pose: Pose = 'stand', 
     content += nested(parts.glasses[safe.glasses], anchors.glasses.x + GLASSES_BOX.x, anchors.glasses.y + GLASSES_BOX.y, GLASSES_BOX);
   }
   if (safe.hat !== 'none') {
-    content += nested(parts.hats[safe.hat], anchors.hat.x + HAT_BOX.x, anchors.hat.y + HAT_BOX.y, HAT_BOX);
+    const { x, y, angle } = anchors.hat;
+    content += `<g transform="rotate(${angle} ${x} ${y})">${nested(parts.hats[safe.hat], x + HAT_BOX.x, y + HAT_BOX.y, HAT_BOX)}</g>`;
   }
   if (parachute) {
     content = nested(parts.parachute, -12, -50, { width: 64, height: 56 }) + content;

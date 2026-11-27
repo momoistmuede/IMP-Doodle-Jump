@@ -315,7 +315,9 @@ Darstellung im Spiel:
 - Hut und Brille sind eigene kleine Sprites. Für jede Pose des Spieler-Spritesheets (stehen, springen,
   schießen, fallen, Fallschirm, Tod) legt `skin.ts` einen Ankerpunkt am Kopf fest. `drawPlayer` zeichnet
   erst die Figur, dann die Brille und zuletzt den Hut an diesem Punkt, mit Blickrichtung und Drehung der
-  Figur.
+  Figur. Beim Schießen zeigt die Schnauze nach oben aus dem Kopf, dort ist kein Platz für den Hut: Er sitzt
+  dann um 40° geneigt auf der rechten Kopfrundung (Ankerpunkt mit Winkel), statt waagerecht daneben zu
+  schweben.
 - Die Engine bleibt unverändert, der Skin betrifft nur die Darstellung.
 - Steht in der Datenbank eine Farbe, die es in der Palette nicht mehr gibt, oder ein unbekanntes Zubehör,
   nimmt das Frontend für diesen Teil den Standard (Standardfarbe bzw. kein Zubehör).

@@ -215,7 +215,11 @@ export class Renderer {
       this.sprites.draw(ctx, `glasses-${this.skin.glasses}` as SpriteName, left + anchors.glasses.x, anchors.glasses.y, scale);
     }
     if (this.skin.hat !== 'none') {
-      this.sprites.draw(ctx, `hat-${this.skin.hat}` as SpriteName, left + anchors.hat.x, anchors.hat.y, scale);
+      ctx.save();
+      ctx.translate(left + anchors.hat.x, anchors.hat.y);
+      ctx.rotate((anchors.hat.angle * Math.PI) / 180);
+      this.sprites.draw(ctx, `hat-${this.skin.hat}` as SpriteName, 0, 0, scale);
+      ctx.restore();
     }
   }
 
