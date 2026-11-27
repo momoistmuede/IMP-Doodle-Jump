@@ -25,6 +25,11 @@ gezeichnet. Konzept und Etappen: [docs/konzept-arcade.md](docs/konzept-arcade.md
    nur das beste Ergebnis pro Name). **Leertaste** = nochmal mit derselben Figur, außerdem **Spieler
    wechseln** oder zurück zur **Bestenliste**.
 
+**Debug-Modus (Cheat):** Im Spiel dreimal hintereinander **Ü** drücken (höchstens 1 s Abstand). Dann
+fliegt die Figur frei: **↑** oder **Leertaste** hoch, **↓** runter, **← →** zur Seite. Sie fliegt durch
+Imps und Exceptions, verliert keine Herzen und kann nicht unten aus dem Bild fallen. Noch einmal dreimal
+**Ü** schaltet ihn wieder aus. Eine Runde, in der der Cheat an war, wird **nicht gespeichert**.
+
 Anzeige im Spiel: der Score groß in einem Reiter auf der oberen Rahmenkante, darunter `HI` (Platz 1) und `NEXT` (der nächste Platz der Top 10,
 den man noch überholen kann). Am linken Rand zeigt der Höhenmeter den Fortschritt in der aktuellen Zone
 (10 px = 1 m).

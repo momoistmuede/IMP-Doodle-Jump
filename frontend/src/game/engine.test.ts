@@ -8,6 +8,8 @@ import {
   newMonster,
   SHOOT_INTERVAL,
   CRUMBLE_DELAY,
+  CHEAT_FLY_SPEED,
+  toggleCheat,
   lowestPoint,
   SHORT_PLATFORM_WIDTH,
   spikeOverlaps,
@@ -836,6 +838,96 @@ describe('engine', () => {
       expect(zone3.every((m) => m.skin.endsWith('@2'))).toBe(true);
       const zone4 = seen(3);
       expect(new Set(zone4.map((m) => m.kind))).toEqual(new Set(['chaser', 'shooter']));
+    });
+  });
+
+  describe('cheat mode', () => {
+    /** A playing game with only the start platform, cheat mode on. */
+    function cheating() {
+      const state = emptyGame();
+      toggleCheat(state);
+      return state;
+    }
+
+    it('switches on and off and marks the round as cheated', () => {
+      const state = emptyGame();
+      expect(state.cheat).toBe(false);
+      expect(state.cheated).toBe(false);
+      toggleCheat(state);
+      expect(state.cheat).toBe(true);
+      expect(state.cheated).toBe(true);
+      toggleCheat(state);
+      expect(state.cheat).toBe(false);
+      expect(state.cheated).toBe(true); // stays: the score of this round is not saved
+      expect(state.events).toEqual([
+        { type: 'cheat', on: true },
+        { type: 'cheat', on: false },
+      ]);
+    });
+
+    it('cannot be switched on during the intro or after death', () => {
+      const intro = createGame(seeded(1), { intro: true });
+      toggleCheat(intro);
+      expect(intro.cheat).toBe(false);
+      const dead = emptyGame();
+      dead.player.hit = true;
+      toggleCheat(dead);
+      expect(dead.cheat).toBe(false);
+    });
+
+    it('flies up with the up key or Space, down with the down key, no gravity', () => {
+      const state = cheating();
+      const input = createInput();
+      /** Exactly `frames` steps, so the distances are exact. */
+      const flown = (frames: number) => {
+        const y = state.player.y;
+        for (let i = 0; i < frames; i++) {
+          update(state, input, DT);
+        }
+        return y - state.player.y;
+      };
+      expect(flown(30)).toBe(0); // hovering
+      input.up = true;
+      expect(flown(60)).toBeCloseTo(CHEAT_FLY_SPEED); // 1 s
+      input.up = false;
+      input.jump = true;
+      expect(flown(30)).toBeCloseTo(CHEAT_FLY_SPEED / 2);
+      expect(state.maxHeight).toBeGreaterThan(CHEAT_FLY_SPEED); // counts as climbing
+      input.jump = false;
+      input.down = true;
+      expect(flown(12)).toBeCloseTo(-CHEAT_FLY_SPEED / 5);
+    });
+
+    it('cannot fall off the screen: the bottom edge is the floor', () => {
+      const state = cheating();
+      const input = createInput();
+      input.down = true;
+      run(state, input, 3);
+      expect(state.player.y + PLAYER_HEIGHT).toBeLessThanOrEqual(state.cameraY + VIEW_HEIGHT + 0.001);
+      expect(state.lives).toBe(MAX_LIVES);
+      expect(state.parachute).toBe(false);
+      expect(state.over).toBe(false);
+    });
+
+    it('passes through monsters and exceptions without losing a heart', () => {
+      const state = cheating();
+      const { x, y } = state.player;
+      state.monsters.push(newMonster(state, 'wobbler', x - 5, y));
+      state.enemyBullets.push({ id: 999, x: x + 10, y: y + 10 });
+      run(state, createInput(), 0.5);
+      expect(state.lives).toBe(MAX_LIVES);
+      expect(state.monsters).toHaveLength(1);
+      expect(state.player.hit).toBe(false);
+    });
+
+    it('switched off, the player falls again', () => {
+      const state = cheating();
+      const input = createInput();
+      input.up = true;
+      run(state, input, 0.3);
+      toggleCheat(state);
+      run(state, createInput(), 0.3);
+      expect(state.player.vy).toBeGreaterThan(0);
     });
   });
 

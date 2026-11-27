@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { Highscore } from '../api';
 import { playEventSounds } from '../audio/gameSounds';
 import { sound } from '../audio/sound';
-import { createGame, createInput, update, VIEW_HEIGHT, WORLD_WIDTH } from '../game/engine';
+import { cheatCodeKey, createCheatCode } from '../game/cheatCode';
+import { createGame, createInput, toggleCheat, update, VIEW_HEIGHT, WORLD_WIDTH } from '../game/engine';
 import { createHud, FONT_FAMILY, updateHud } from '../game/hud';
 import { Renderer, viewBackground } from '../game/render';
 import { formatScore } from '../game/scoreboard';
@@ -18,7 +19,7 @@ const MAX_STEP = 1 / 30;
 /** Pause between falling off the screen and the game-over screen. */
 const GAME_OVER_DELAY_MS = 600;
 
-const CONTROL_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Space', 'Enter', 'KeyF']);
+const CONTROL_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Space', 'Enter', 'KeyF']);
 
 /** Frame around the playfield, in CSS pixels. */
 const FRAME = 4;
@@ -62,7 +63,8 @@ interface Props {
   skin: Skin;
   /** The top 10 for HI and NEXT in the HUD. */
   highscores: Highscore[];
-  onGameOver: (score: number) => void;
+  /** `cheated`: the cheat mode was on in this round. */
+  onGameOver: (score: number, cheated: boolean) => void;
 }
 
 export function GameScreen({ skin, highscores, onGameOver }: Props) {
@@ -80,6 +82,7 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
     const tab = tabRef.current!;
     const state = createGame(Math.random, { intro: true });
     const input = createInput();
+    const cheatCode = createCheatCode();
     const hud = createHud(topRef.current);
     let renderer: Renderer | undefined;
     let frame = 0;
@@ -123,6 +126,12 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
         case 'ArrowRight':
           input.right = down;
           break;
+        case 'ArrowUp':
+          input.up = down;
+          break;
+        case 'ArrowDown':
+          input.down = down;
+          break;
         case 'Space':
           input.jump = down;
           break;
@@ -131,12 +140,19 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
           break;
       }
     };
-    const onKeyDown = (event: KeyboardEvent) => setKey(event, true);
+    const onKeyDown = (event: KeyboardEvent) => {
+      // Ü three times: debug mode on or off (see cheatCode.ts).
+      if (!event.repeat && cheatCodeKey(cheatCode, event.key, event.timeStamp)) {
+        toggleCheat(state);
+      }
+      setKey(event, true);
+    };
     const onKeyUp = (event: KeyboardEvent) => setKey(event, false);
     const onBlur = () => Object.assign(input, createInput());
 
     const loop = (now: number) => {
-      const dt = Math.min(MAX_STEP, (now - last) / 1000);
+      // The first frame's timestamp can lie before `last` (taken with performance.now()): never negative.
+      const dt = Math.max(0, Math.min(MAX_STEP, (now - last) / 1000));
       last = now;
       update(state, input, dt);
       input.fire = false;
@@ -162,7 +178,7 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
       renderer!.render(state, hud, canvas.width / WORLD_WIDTH);
 
       if (state.over) {
-        gameOverTimer = setTimeout(() => onGameOverRef.current(state.score), GAME_OVER_DELAY_MS);
+        gameOverTimer = setTimeout(() => onGameOverRef.current(state.score, state.cheated), GAME_OVER_DELAY_MS);
       } else {
         frame = requestAnimationFrame(loop);
       }
