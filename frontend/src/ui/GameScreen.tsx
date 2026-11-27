@@ -151,7 +151,8 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
     const onBlur = () => Object.assign(input, createInput());
 
     const loop = (now: number) => {
-      const dt = Math.min(MAX_STEP, (now - last) / 1000);
+      // The first frame's timestamp can lie before `last` (taken with performance.now()): never negative.
+      const dt = Math.max(0, Math.min(MAX_STEP, (now - last) / 1000));
       last = now;
       update(state, input, dt);
       input.fire = false;
