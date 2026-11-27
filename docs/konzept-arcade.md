@@ -598,7 +598,10 @@ Modell:
 `skin` für das Aussehen und `hp`. Das Verhalten bestimmt Bewegungsfunktion, Größe und Bonus. Das Aussehen
 hängt von der Zone ab, in der das Monster erzeugt wird (Eintrag in `ZONES`). Damit brauchen die Zonen 5–8
 nur neue Sprites und keinen neuen Code. Schüsse ziehen 1 HP ab, ein Sprung von oben tötet immer, das ist
-die Arcade-Belohnung für Mut. Die Geschosse des Schützen (im Development der Bug-Imp mit seinen Exceptions)
+die Arcade-Belohnung für Mut. Imps mit mehr als 1 HP zeigen ihre Treffer als Punkte über dem Kopf (rot =
+hält noch einen Schuss aus, grau = schon getroffen). Überleben sie einen Schuss, flackern sie 0,3 s weiß
+und wackeln (`Monster.flash`); danach raucht es aus ihrem Kopf, bis sie fallen. So sieht man, dass noch
+ein Schuss nötig ist. Die Geschosse des Schützen (im Development der Bug-Imp mit seinen Exceptions)
 werden als eigene Liste `enemyBullets` geführt.
 
 ### 4.4 Stachelplattformen
