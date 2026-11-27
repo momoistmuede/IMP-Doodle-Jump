@@ -111,6 +111,9 @@ export function updateHud(hud: Hud, state: GameState, dt: number): boolean {
       case 'introLand':
         hud.banner = { title: 'GO!', age: 0, duration: 1 };
         break;
+      case 'cheat':
+        hud.banner = { title: event.on ? 'CHEAT ON' : 'CHEAT OFF', age: 0, duration: 1 };
+        break;
       case 'kill':
       case 'heartBonus':
       case 'points':
@@ -178,6 +181,10 @@ export function drawHud(ctx: CanvasRenderingContext2D, hud: Hud, state: GameStat
   drawHearts(ctx, hud, state, sprites, scale);
   drawMeter(ctx, state);
   drawSpeaker(ctx, hud.muted);
+  if (state.cheat) {
+    // Under the hearts and the jetpack bar, as long as the cheat mode is on.
+    text(ctx, 'CHEAT', 392, 50, 8, PALETTE.yellow, 'right');
+  }
 
   if (hud.banner) {
     const { title, subtitle } = hud.banner;

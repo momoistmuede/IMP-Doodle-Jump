@@ -27,7 +27,7 @@ type Screen =
   | { kind: 'name' }
   | { kind: 'skin'; returning: boolean }
   | { kind: 'playing'; round: number }
-  | { kind: 'gameOver'; score: number };
+  | { kind: 'gameOver'; score: number; cheated: boolean };
 
 /** Who is playing; stays until "Spieler wechseln". */
 interface PlayerInfo {
@@ -121,9 +121,9 @@ export function App() {
           key={screen.round}
           skin={player.skin}
           highscores={highscores.entries ?? []}
-          onGameOver={(score) => {
+          onGameOver={(score, cheated) => {
             lastResult.current = null;
-            setScreen({ kind: 'gameOver', score });
+            setScreen({ kind: 'gameOver', score, cheated });
           }}
         />
       );
@@ -133,6 +133,7 @@ export function App() {
         <GameOverScreen
           name={player.name}
           score={screen.score}
+          cheated={screen.cheated}
           highscores={highscores.entries ?? []}
           onSaved={(result) => {
             lastResult.current = result;

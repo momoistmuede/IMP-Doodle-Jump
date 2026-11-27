@@ -89,6 +89,9 @@ export const JETPACK_SPUTTER = 0.75;
 /** Short invulnerability after the jetpack falls off, to land safely on the chain. */
 const JETPACK_LANDING_INVULNERABILITY = 1;
 
+/** Cheat mode: flying speed, up and down, in px/s (as fast as the jetpack). */
+export const CHEAT_FLY_SPEED = JETPACK_SPEED;
+
 /** The intro: floating down on the parachute from the boss's chair to the start (see concept 3.4). */
 export const INTRO_START_M = 7100;
 export const INTRO_DURATION = 10;
@@ -199,6 +202,9 @@ export interface Input {
   fire: boolean;
   /** One shot: skips the intro (Space or Enter, without key repeat). */
   skip: boolean;
+  /** Held: flying up and down in cheat mode (up also with jump). */
+  up: boolean;
+  down: boolean;
 }
 
 /** Something that happened during `update`, for the HUD and the sound; the caller empties `state.events`. */
@@ -230,7 +236,9 @@ export type GameEvent =
   | { type: 'introStart' }
   /** The intro passes into a zone (descending). */
   | { type: 'introZone'; zone: number }
-  | { type: 'introLand' };
+  | { type: 'introLand' }
+  /** The cheat mode was switched on or off. */
+  | { type: 'cheat'; on: boolean };
 
 export interface GameState {
   /** The round starts with the intro; the player only takes control once it has landed. */
@@ -274,6 +282,10 @@ export interface GameState {
   chainTopY: number;
   /** The platforms of that step, for the spike rules. */
   chainTop: Platform[];
+  /** Cheat mode: flying freely, no damage, no falling off (see `toggleCheat`). */
+  cheat: boolean;
+  /** The cheat mode was on at some point of this round: its score is not saved. */
+  cheated: boolean;
   /** y of the last monster, keeps monsters at least a screen apart. */
   lastMonsterY: number;
   /** y of the last power-up per kind, for the minimum distance between them. */
@@ -336,7 +348,7 @@ const POWER_UPS: Record<PowerUpKind, PowerUpType> = {
 };
 
 export function createInput(): Input {
-  return { left: false, right: false, jump: false, fire: false, skip: false };
+  return { left: false, right: false, jump: false, fire: false, skip: false, up: false, down: false };
 }
 
 export function createGame(random: () => number = Math.random, options: { intro?: boolean } = {}): GameState {
@@ -395,6 +407,8 @@ export function createGame(random: () => number = Math.random, options: { intro?
     fireCooldown: 0,
     chainTopY: startPlatform.y,
     chainTop: [startPlatform],
+    cheat: false,
+    cheated: false,
     lastMonsterY: 0,
     lastPowerUpY: { jetpack: Infinity, heart: Infinity, points: Infinity },
     nextId: 2,
@@ -450,6 +464,8 @@ export function update(state: GameState, input: Input, dt: number): void {
     floatDown(state, input, dt);
   } else if (state.jetpack > 0) {
     fly(state, input, dt);
+  } else if (state.cheat) {
+    cheatFly(state, input, dt);
   } else {
     movePlayer(state, input, dt);
   }
@@ -724,6 +740,34 @@ function fly(state: GameState, input: Input, dt: number) {
   }
 }
 
+/**
+ * Switches the cheat mode (debug mode) on or off: the player flies freely with the arrow keys and
+ * Space, passes through monsters and exceptions and cannot fall off the screen. Only while playing
+ * and alive. Marks the round as cheated, so its score is not saved.
+ */
+export function toggleCheat(state: GameState): void {
+  if (state.phase !== 'playing' || state.over || state.player.hit) {
+    return;
+  }
+  state.cheat = !state.cheat;
+  state.cheated = true;
+  state.player.standingOn = null;
+  state.player.vy = 0; // switched off: falls from here like after a jump
+  state.events.push({ type: 'cheat', on: state.cheat });
+}
+
+/** Cheat mode: up and down at a fixed speed, steerable, no gravity and no platforms. */
+function cheatFly(state: GameState, input: Input, dt: number) {
+  const player = state.player;
+  player.standingOn = null;
+  steer(player, Number(input.right) - Number(input.left), dt);
+  wrap(player);
+  player.vy = (Number(input.down) - Number(input.up || input.jump)) * CHEAT_FLY_SPEED;
+  player.y += player.vy * dt;
+  // The camera only moves up: the bottom edge of the screen is the floor.
+  player.y = Math.min(player.y, state.cameraY + VIEW_HEIGHT - PLAYER_HEIGHT);
+}
+
 /** Sinking slowly on the parachute; steerable, but no jumping and no shooting. */
 function floatDown(state: GameState, input: Input, dt: number) {
   const player = state.player;
@@ -760,8 +804,8 @@ function moveMonsters(state: GameState, previousPlayerY: number, dt: number) {
       monster.announced = true;
       state.events.push({ type: 'monsterNear', kind: monster.kind });
     }
-    // On the jetpack the player flies through monsters.
-    if (player.hit || state.parachute || state.jetpack > 0 || !overlaps(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT, monster.x, monster.y, MONSTER_WIDTH, MONSTER_HEIGHT, 6)) {
+    // On the jetpack and in cheat mode the player flies through monsters.
+    if (player.hit || state.parachute || state.jetpack > 0 || state.cheat || !overlaps(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT, monster.x, monster.y, MONSTER_WIDTH, MONSTER_HEIGHT, 6)) {
       continue;
     }
     if (player.vy > 0 && previousPlayerY + PLAYER_HEIGHT <= monster.y + MONSTER_HEIGHT / 2) {
@@ -833,6 +877,7 @@ function moveEnemyBullets(state: GameState, dt: number) {
       !player.hit &&
       !state.parachute &&
       state.jetpack === 0 &&
+      !state.cheat &&
       state.invulnerable === 0 &&
       overlaps(player.x, player.y, PLAYER_WIDTH, PLAYER_HEIGHT, bullet.x, bullet.y, ENEMY_BULLET_WIDTH, ENEMY_BULLET_HEIGHT, 4);
     if (hits) {

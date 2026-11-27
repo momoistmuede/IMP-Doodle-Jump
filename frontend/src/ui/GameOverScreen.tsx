@@ -18,6 +18,8 @@ import { Title } from './Title';
 interface Props {
   name: string;
   score: number;
+  /** The cheat mode was on in this round: nothing is saved and there is no new highscore. */
+  cheated: boolean;
   /** The top 10 before this round, for "NEUER HIGHSCORE – PLATZ 3!". */
   highscores: Highscore[];
   /** The score was saved; the caller reloads the top list. */
@@ -31,14 +33,17 @@ type SaveState = { kind: 'saving' } | { kind: 'saved'; result: SubmitResult } | 
 
 /**
  * After the round: the score is saved automatically under the player's name (the backend keeps only
- * the best one, so a bad round does no harm). No "Continue?": whoever dies starts again.
+ * the best one, so a bad round does no harm), unless the cheat mode was on. No "Continue?": whoever
+ * dies starts again.
  */
-export function GameOverScreen({ name, score, highscores, onSaved, onReplay, onChangePlayer, onHighscores }: Props) {
+export function GameOverScreen({ name, score, cheated, highscores, onSaved, onReplay, onChangePlayer, onHighscores }: Props) {
   const [state, setState] = useState<SaveState>({ kind: 'saving' });
-  const place = placeFor(
-    highscores.map((h) => h.score),
-    score,
-  );
+  const place = cheated
+    ? null
+    : placeFor(
+        highscores.map((h) => h.score),
+        score,
+      );
   const onSavedRef = useRef(onSaved);
   onSavedRef.current = onSaved;
   const started = useRef(false);
@@ -56,11 +61,11 @@ export function GameOverScreen({ name, score, highscores, onSaved, onReplay, onC
 
   // Exactly once, also under React's StrictMode double effects.
   useEffect(() => {
-    if (!started.current) {
+    if (!started.current && !cheated) {
       started.current = true;
       save();
     }
-  }, [save]);
+  }, [save, cheated]);
 
   // After the game-over melody: a jingle for a new highscore, then the calm title loop.
   useEffect(() => {
@@ -103,7 +108,12 @@ export function GameOverScreen({ name, score, highscores, onSaved, onReplay, onC
             {place !== null && <Typography sx={{ color: PALETTE.yellow, textAlign: 'center' }}>NEUER HIGHSCORE – PLATZ {place}!</Typography>}
           </Stack>
 
-          {state.kind === 'saving' && (
+          {cheated && (
+            <Typography variant="body2" sx={{ color: PALETTE.yellow, textAlign: 'center' }}>
+              CHEAT-RUNDE – NICHT GESPEICHERT
+            </Typography>
+          )}
+          {!cheated && state.kind === 'saving' && (
             <Typography variant="body2" color="text.secondary">
               SPEICHERE FÜR {name.toUpperCase()} …
             </Typography>

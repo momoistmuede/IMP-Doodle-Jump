@@ -80,6 +80,9 @@ export function playEventSounds(events: readonly GameEvent[], state: GameState) 
           WARNINGS.forEach((delay) => sound.play('warn', { delay }));
         }
         break;
+      case 'cheat':
+        sound.play(event.on ? 'insertCoin' : 'click');
+        break;
       case 'death':
         sound.stopMusic(0);
         sound.play('gameOver', { delay: 0.2 });
