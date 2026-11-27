@@ -61,6 +61,9 @@ export const MONSTER_TYPES: Record<MonsterKind, { bonus: number; hp: number }> =
   shooter: { bonus: 150, hp: 1 },
 };
 
+/** A hit the monster survives: it flashes and jolts this long (see render.ts). */
+export const MONSTER_HIT_FLASH = 0.3;
+
 export const MAX_LIVES = 3;
 /** Invulnerability after losing a heart to a monster, and after a parachute landing. */
 export const HURT_INVULNERABILITY = 2;
@@ -147,6 +150,8 @@ export interface Monster {
   phase: number;
   /** Hit points; a shot takes one, a jump from above always kills. */
   hp: number;
+  /** Seconds left of the flash after a hit it survived (0 = none). */
+  flash: number;
   /** Horizontal speed of flyers. */
   vx: number;
   /** Seconds until a shooter's next exception. */
@@ -799,6 +804,7 @@ function moveMonsters(state: GameState, previousPlayerY: number, dt: number) {
   const player = state.player;
   const killed = new Set<number>();
   for (const monster of state.monsters) {
+    monster.flash = Math.max(0, monster.flash - dt);
     moveMonster(state, monster, dt);
     if (!monster.announced && monster.y + MONSTER_HEIGHT > state.cameraY - MONSTER_WARNING_DISTANCE) {
       monster.announced = true;
@@ -927,6 +933,7 @@ function moveBullets(state: GameState, dt: number) {
     if (target) {
       target.hp--;
       if (target.hp > 0) {
+        target.flash = MONSTER_HIT_FLASH;
         state.events.push({ type: 'monsterHit' });
       } else {
         state.monsters = state.monsters.filter((m) => m !== target);
@@ -1150,7 +1157,7 @@ function maybeAddPowerUp(state: GameState, platform: Platform) {
 }
 
 export function newMonster(state: GameState, kind: MonsterKind, x: number, y: number, skin = impSkin(0, kind)): Monster {
-  return { id: state.nextId++, kind, skin, x, y, baseX: x, baseY: y, phase: 0, hp: MONSTER_TYPES[kind].hp, vx: 0, reload: SHOOT_INTERVAL };
+  return { id: state.nextId++, kind, skin, x, y, baseX: x, baseY: y, phase: 0, hp: MONSTER_TYPES[kind].hp, flash: 0, vx: 0, reload: SHOOT_INTERVAL };
 }
 
 function newPlatform(state: GameState, x: number, y: number, kind: PlatformKind, width = PLATFORM_WIDTH): Platform {

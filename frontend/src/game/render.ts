@@ -3,6 +3,8 @@ import {
   ENEMY_BULLET_HEIGHT,
   ENEMY_BULLET_WIDTH,
   JETPACK_SPUTTER,
+  MONSTER_HIT_FLASH,
+  MONSTER_TYPES,
   MONSTER_WIDTH,
   PLATFORM_HEIGHT,
   PLAYER_WIDTH,
@@ -215,7 +217,11 @@ export class Renderer {
       this.sprites.draw(ctx, `glasses-${this.skin.glasses}` as SpriteName, left + anchors.glasses.x, anchors.glasses.y, scale);
     }
     if (this.skin.hat !== 'none') {
-      this.sprites.draw(ctx, `hat-${this.skin.hat}` as SpriteName, left + anchors.hat.x, anchors.hat.y, scale);
+      ctx.save();
+      ctx.translate(left + anchors.hat.x, anchors.hat.y);
+      ctx.rotate((anchors.hat.angle * Math.PI) / 180);
+      this.sprites.draw(ctx, `hat-${this.skin.hat}` as SpriteName, 0, 0, scale);
+      ctx.restore();
     }
   }
 
@@ -256,13 +262,17 @@ export class Renderer {
 
   /**
    * An imp in the look of its zone; the IMP logo is a layer of its own on the shirt, never mirrored.
-   * Each behaviour moves a little differently.
+   * Each behaviour moves a little differently. Imps that take more than one shot show their hit
+   * points; a hit they survive makes them flash white and jolt, and from then on they smoke.
    */
   private drawMonster(monster: Monster, time: number, scale: number) {
     const ctx = this.ctx;
     const bob = monster.kind === 'flyer' ? 0 : Math.sin(time * 6 + monster.phase) * 2;
+    const hit = monster.flash / MONSTER_HIT_FLASH; // 1 right after the hit, fading to 0
+    const jolt = Math.sin(hit * Math.PI * 6) * 4 * hit;
+    const mirror = monster.kind === 'flyer' && monster.vx < 0 ? -1 : 1;
     ctx.save();
-    ctx.translate(monster.x + MONSTER_WIDTH / 2, monster.y + bob);
+    ctx.translate(monster.x + MONSTER_WIDTH / 2 + jolt, monster.y + bob);
     switch (monster.kind) {
       case 'wobbler':
         ctx.rotate(Math.sin(time * 18 + monster.phase) * 0.06); // wobbling to the ring
@@ -279,13 +289,26 @@ export class Renderer {
         break;
     }
     ctx.save();
-    if (monster.kind === 'flyer' && monster.vx < 0) {
-      ctx.scale(-1, 1);
-    }
+    ctx.scale(mirror, 1);
     this.sprites.drawImp(ctx, monster.skin, -MONSTER_WIDTH / 2, 0, scale);
     ctx.restore();
     this.sprites.draw(ctx, 'imp-logo', LOGO_ANCHOR.x - MONSTER_WIDTH / 2, LOGO_ANCHOR.y, scale);
+    // The flash flickers (3 times), so it also shows on light backgrounds; the outline stays visible.
+    if (hit > 0 && Math.floor(hit * 6) % 2 === 1) {
+      ctx.save();
+      ctx.scale(mirror, 1);
+      this.sprites.drawImpFlash(ctx, monster.skin, -MONSTER_WIDTH / 2, 0, scale, 0.8);
+      ctx.restore();
+    }
     ctx.restore();
+
+    const maxHp = MONSTER_TYPES[monster.kind].hp;
+    if (monster.hp < maxHp) {
+      drawSmoke(ctx, monster, time);
+    }
+    if (maxHp > 1) {
+      drawHitPoints(ctx, monster, maxHp);
+    }
   }
 
   /** An exception thrown by a bug imp: a red box with an exclamation mark. */
@@ -311,6 +334,37 @@ export class Renderer {
     ctx.lineTo(0, 4.2);
     ctx.stroke();
     ctx.restore();
+  }
+}
+
+/** A damaged imp smokes: grey puffs rise from its right horn and fade. */
+function drawSmoke(ctx: CanvasRenderingContext2D, monster: Monster, time: number) {
+  ctx.fillStyle = PALETTE.grey;
+  ctx.strokeStyle = PALETTE.greyDark;
+  ctx.lineWidth = 1;
+  for (let i = 0; i < 3; i++) {
+    const t = (time * 0.9 + i / 3 + monster.phase) % 1;
+    ctx.globalAlpha = (1 - t) * 0.8;
+    ctx.beginPath();
+    ctx.arc(monster.x + MONSTER_WIDTH / 2 + 14 + Math.sin((t + i) * 5) * 3, monster.y - 6 - t * 24, 2.5 + t * 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** Hit points left, as dots above the head: red for each shot it still takes, grey for those it took. */
+function drawHitPoints(ctx: CanvasRenderingContext2D, monster: Monster, maxHp: number) {
+  const spacing = 10;
+  const left = monster.x + MONSTER_WIDTH / 2 - ((maxHp - 1) * spacing) / 2;
+  ctx.strokeStyle = PALETTE.ink;
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i < maxHp; i++) {
+    ctx.fillStyle = i < monster.hp ? PALETTE.red : PALETTE.grey;
+    ctx.beginPath();
+    ctx.arc(left + i * spacing, monster.y - 18, 3.5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
   }
 }
 

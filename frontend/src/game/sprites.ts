@@ -131,6 +131,16 @@ export class Sprites {
     this.drawAny(ctx, this.specs.has(skin) ? skin : impSkin(0, 'wobbler'), x, y, scale);
   }
 
+  /** The imp as a white silhouette at `alpha`, laid over it for the hit flash. */
+  drawImpFlash(ctx: CanvasRenderingContext2D, skin: string, x: number, y: number, scale: number, alpha: number) {
+    const name = this.specs.has(skin) ? skin : impSkin(0, 'wobbler');
+    const spec = this.specs.get(name)!;
+    ctx.save();
+    ctx.globalAlpha *= alpha;
+    ctx.drawImage(this.silhouette(name, scale), x + spec.x, y + spec.y, spec.width, spec.height);
+    ctx.restore();
+  }
+
   private drawAny(ctx: CanvasRenderingContext2D, name: string, x: number, y: number, scale: number) {
     const spec = this.specs.get(name)!;
     ctx.drawImage(this.raster(name, scale), x + spec.x, y + spec.y, spec.width, spec.height);
@@ -151,6 +161,25 @@ export class Sprites {
       ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(this.images.get(name)!, 0, 0, canvas.width, canvas.height);
       this.rasters.set(name, canvas);
+    }
+    return canvas;
+  }
+
+  /** White silhouette of a raster, cached like the raster itself. */
+  private silhouette(name: string, scale: number): HTMLCanvasElement {
+    const raster = this.raster(name, scale); // clears the cache on a new scale
+    const key = `${name}#white`;
+    let canvas = this.rasters.get(key);
+    if (!canvas) {
+      canvas = document.createElement('canvas');
+      canvas.width = raster.width;
+      canvas.height = raster.height;
+      const ctx = canvas.getContext('2d')!;
+      ctx.drawImage(raster, 0, 0);
+      ctx.globalCompositeOperation = 'source-in';
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      this.rasters.set(key, canvas);
     }
     return canvas;
   }

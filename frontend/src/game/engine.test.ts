@@ -4,6 +4,7 @@ import {
   JETPACK_DURATION,
   JETPACK_SPEED,
   ENEMY_BULLET_SPEED,
+  MONSTER_HIT_FLASH,
   MONSTER_TYPES,
   newMonster,
   SHOOT_INTERVAL,
@@ -763,6 +764,25 @@ describe('engine', () => {
       run(state, createInput(), 0.25);
       expect(state.monsters).not.toContain(monster);
       expect(state.score).toBe(MONSTER_TYPES.chaser.bonus);
+    });
+
+    it('flashes after a hit it survives, so the player knows it takes another shot', () => {
+      const { state, monster } = withMonster('chaser');
+      expect(monster.flash).toBe(0);
+      monster.x = state.player.x;
+      monster.y = state.player.y - 120;
+      const input = createInput();
+      input.fire = true;
+      update(state, input, DT);
+      // The bullet needs a few frames to reach the monster.
+      for (let i = 0; i < 10 && monster.hp === MONSTER_TYPES.chaser.hp; i++) {
+        update(state, createInput(), DT);
+      }
+      expect(monster.hp).toBe(1);
+      expect(monster.flash).toBeGreaterThan(MONSTER_HIT_FLASH - 2 * DT);
+      run(state, createInput(), MONSTER_HIT_FLASH + DT);
+      expect(monster.flash).toBe(0);
+      expect(monster.hp).toBe(1); // stays damaged until the next shot
     });
 
     it('shooters throw exceptions while on screen; a hit costs a heart', () => {

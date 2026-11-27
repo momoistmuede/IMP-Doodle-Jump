@@ -315,7 +315,9 @@ Darstellung im Spiel:
 - Hut und Brille sind eigene kleine Sprites. Für jede Pose des Spieler-Spritesheets (stehen, springen,
   schießen, fallen, Fallschirm, Tod) legt `skin.ts` einen Ankerpunkt am Kopf fest. `drawPlayer` zeichnet
   erst die Figur, dann die Brille und zuletzt den Hut an diesem Punkt, mit Blickrichtung und Drehung der
-  Figur.
+  Figur. Beim Schießen zeigt die Schnauze nach oben aus dem Kopf, dort ist kein Platz für den Hut: Er sitzt
+  dann um 40° geneigt auf der rechten Kopfrundung (Ankerpunkt mit Winkel), statt waagerecht daneben zu
+  schweben.
 - Die Engine bleibt unverändert, der Skin betrifft nur die Darstellung.
 - Steht in der Datenbank eine Farbe, die es in der Palette nicht mehr gibt, oder ein unbekanntes Zubehör,
   nimmt das Frontend für diesen Teil den Standard (Standardfarbe bzw. kein Zubehör).
@@ -596,7 +598,10 @@ Modell:
 `skin` für das Aussehen und `hp`. Das Verhalten bestimmt Bewegungsfunktion, Größe und Bonus. Das Aussehen
 hängt von der Zone ab, in der das Monster erzeugt wird (Eintrag in `ZONES`). Damit brauchen die Zonen 5–8
 nur neue Sprites und keinen neuen Code. Schüsse ziehen 1 HP ab, ein Sprung von oben tötet immer, das ist
-die Arcade-Belohnung für Mut. Die Geschosse des Schützen (im Development der Bug-Imp mit seinen Exceptions)
+die Arcade-Belohnung für Mut. Imps mit mehr als 1 HP zeigen ihre Treffer als Punkte über dem Kopf (rot =
+hält noch einen Schuss aus, grau = schon getroffen). Überleben sie einen Schuss, flackern sie 0,3 s weiß
+und wackeln (`Monster.flash`); danach raucht es aus ihrem Kopf, bis sie fallen. So sieht man, dass noch
+ein Schuss nötig ist. Die Geschosse des Schützen (im Development der Bug-Imp mit seinen Exceptions)
 werden als eigene Liste `enemyBullets` geführt.
 
 ### 4.4 Stachelplattformen
