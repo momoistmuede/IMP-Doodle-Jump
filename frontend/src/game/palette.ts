@@ -48,3 +48,15 @@ export const PALETTE = {
 } as const;
 
 export type PaletteColor = (typeof PALETTE)[keyof typeof PALETTE];
+
+/** Mixes two hex colours: t = 0 gives a, t = 1 gives b. */
+export function mixColors(a: string, b: string, t: number): string {
+  const ca = parseHex(a);
+  const cb = parseHex(b);
+  const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
+  return `rgb(${mixed.join(',')})`;
+}
+
+export function parseHex(color: string): [number, number, number] {
+  return [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16)) as [number, number, number];
+}

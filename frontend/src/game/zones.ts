@@ -1,5 +1,5 @@
 import type { TrackName } from '../audio/music';
-import { PALETTE } from './palette';
+import { mixColors, PALETTE } from './palette';
 
 /**
  * The zones of the climb, named after the departments: from the hotline up to the boss's chair
@@ -106,6 +106,21 @@ export const ZONE_NAMES = ZONES.map((z) => z.name);
 /** Index of the zone (0-based) at the given height in metres. */
 export function zoneIndexAt(meters: number): number {
   return Math.min(ZONES.length - 1, Math.max(0, Math.floor(meters / ZONE_HEIGHT_M)));
+}
+
+/** The background blends into the next zone's over this many metres before the zone boundary. */
+const TRANSITION_M = 20;
+
+/**
+ * Background at a height in metres: the zone's colour, blended into the next zone's just before the
+ * boundary. `blend` is how far the transition has got (0 to 1).
+ */
+export function backgroundAt(meters: number): { zone: number; blend: number; color: string } {
+  const zone = zoneIndexAt(meters);
+  const boundary = (zone + 1) * ZONE_HEIGHT_M;
+  const blend = zone < ZONES.length - 1 ? Math.min(1, Math.max(0, (meters - (boundary - TRANSITION_M)) / TRANSITION_M)) : 0;
+  const next = ZONES[Math.min(zone + 1, ZONES.length - 1)];
+  return { zone, blend, color: mixColors(ZONES[zone].background, next.background, blend) };
 }
 
 /** Zone index at a height in px above the start. */

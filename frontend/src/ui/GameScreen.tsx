@@ -6,10 +6,12 @@ import { playEventSounds } from '../audio/gameSounds';
 import { sound } from '../audio/sound';
 import { createGame, createInput, update, VIEW_HEIGHT, WORLD_WIDTH } from '../game/engine';
 import { createHud, FONT_FAMILY, updateHud } from '../game/hud';
-import { Renderer } from '../game/render';
+import { Renderer, viewBackground } from '../game/render';
+import { formatScore } from '../game/scoreboard';
 import { Sprites } from '../game/sprites';
 import { PALETTE } from '../game/palette';
 import { sanitizeSkin, skinColors, type Skin } from '../game/skin';
+import { ARCADE_FONT } from './theme';
 
 /** Longest simulated step, so a stalled tab does not teleport the player. */
 const MAX_STEP = 1 / 30;
@@ -17,6 +19,35 @@ const MAX_STEP = 1 / 30;
 const GAME_OVER_DELAY_MS = 600;
 
 const CONTROL_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'Space', 'Enter', 'KeyF']);
+
+/** Frame around the playfield, in CSS pixels. */
+const FRAME = 4;
+/** Space around the game, as in App.tsx (p: 2). */
+const PAGE_PADDING = 16;
+const MAX_HEIGHT = 900;
+
+/**
+ * The score sits in a tab on the top edge of the frame, centred on the frame line, in the colour of
+ * the zone's background. Sizes in world pixels, so the tab scales with the playfield. It reaches
+ * 24 world pixels (plus half the frame) into the playfield; the HI and NEXT lines start below it (hud.ts).
+ */
+const TAB_FONT = 32;
+const TAB_PADDING = 8;
+const TAB_OVERHANG = TAB_FONT / 2 + TAB_PADDING;
+/** Size of the tab while the score pulses after bonus points. */
+const SCORE_PULSE = 1.1;
+const TAB_CENTERED = 'translate(-50%, -50%)';
+
+/**
+ * One world pixel in CSS pixels: the playfield plus the tab sticking out above it fit into the
+ * window, but the playfield is never higher than MAX_HEIGHT.
+ */
+const UNIT = `min(
+  (100vh - ${2 * PAGE_PADDING}px) / ${VIEW_HEIGHT + TAB_OVERHANG},
+  (100vw - ${2 * PAGE_PADDING}px) / ${WORLD_WIDTH},
+  ${MAX_HEIGHT / VIEW_HEIGHT}px
+)`;
+const world = (pixels: number) => `calc(var(--unit) * ${pixels})`;
 
 /** Font and sprites are loaded once; otherwise the first frame would show the fallback font. */
 let assets: Promise<Sprites> | undefined;
@@ -36,6 +67,7 @@ interface Props {
 
 export function GameScreen({ skin, highscores, onGameOver }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const tabRef = useRef<HTMLDivElement>(null);
   const onGameOverRef = useRef(onGameOver);
   onGameOverRef.current = onGameOver;
   const topRef = useRef(highscores.map((h) => h.score));
@@ -45,6 +77,7 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
   useEffect(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext('2d')!;
+    const tab = tabRef.current!;
     const state = createGame(Math.random, { intro: true });
     const input = createInput();
     const hud = createHud(topRef.current);
@@ -54,6 +87,25 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
     let stopped = false;
     let muffled = false;
     let gameOverTimer: ReturnType<typeof setTimeout> | undefined;
+    let shownScore = '';
+    let shownPulse = false;
+    let shownBackground = '';
+
+    /** Writes score and background straight into the tab, so React does not re-render every frame. */
+    const updateTab = () => {
+      const score = formatScore(state.score);
+      if (score !== shownScore) {
+        tab.textContent = shownScore = score;
+      }
+      const pulse = hud.pulse > 0;
+      if (pulse !== shownPulse) {
+        tab.style.transform = (shownPulse = pulse) ? `${TAB_CENTERED} scale(${SCORE_PULSE})` : '';
+      }
+      const background = viewBackground(state).color;
+      if (background !== shownBackground) {
+        tab.style.backgroundColor = shownBackground = background;
+      }
+    };
 
     const setKey = (event: KeyboardEvent, down: boolean) => {
       if (!CONTROL_KEYS.has(event.code)) {
@@ -99,6 +151,7 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
         sound.setMuffled(muffled);
       }
       hud.muted = sound.current.muted;
+      updateTab();
 
       // Canvas resolution follows its CSS size and the device pixel ratio.
       const width = Math.round(canvas.clientWidth * devicePixelRatio);
@@ -127,6 +180,8 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
         (sprites) => {
           if (stopped) return;
           renderer = new Renderer(ctx, sprites, sanitizeSkin(skinRef.current));
+          updateTab();
+          tab.style.visibility = 'visible'; // only now, with the arcade font loaded
           last = performance.now();
           frame = requestAnimationFrame(loop);
         },
@@ -144,12 +199,41 @@ export function GameScreen({ skin, highscores, onGameOver }: Props) {
   }, []);
 
   return (
-    <Box sx={{ position: 'relative', height: 'min(calc(100vh - 32px), 900px)', aspectRatio: `${WORLD_WIDTH} / ${VIEW_HEIGHT}`, maxWidth: '100%' }}>
+    <Box
+      sx={{
+        '--unit': UNIT,
+        position: 'relative',
+        width: world(WORLD_WIDTH),
+        height: world(VIEW_HEIGHT),
+        mt: world(TAB_OVERHANG),
+      }}
+    >
       <Box
         component="canvas"
         ref={canvasRef}
         aria-label="Spielfeld"
-        sx={{ display: 'block', width: '100%', height: '100%', bgcolor: PALETTE.paper, outline: `4px solid ${PALETTE.slate}` }}
+        sx={{ display: 'block', width: '100%', height: '100%', bgcolor: PALETTE.paper, outline: `${FRAME}px solid ${PALETTE.slate}` }}
+      />
+      <Box
+        ref={tabRef}
+        sx={{
+          visibility: 'hidden',
+          position: 'absolute',
+          top: -FRAME / 2,
+          left: '50%',
+          transform: TAB_CENTERED,
+          p: world(TAB_PADDING),
+          border: `${FRAME}px solid ${PALETTE.slate}`,
+          bgcolor: PALETTE.paper,
+          // White with a dark outline like the HUD texts (hud.ts), readable on every zone's colour.
+          color: PALETTE.white,
+          WebkitTextStroke: `${world(TAB_FONT / 5)} ${PALETTE.ink}`,
+          paintOrder: 'stroke fill',
+          fontFamily: ARCADE_FONT,
+          fontSize: world(TAB_FONT),
+          lineHeight: 1,
+          whiteSpace: 'nowrap',
+        }}
       />
       {error && (
         <Typography color="error" sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', p: 2, textAlign: 'center' }}>

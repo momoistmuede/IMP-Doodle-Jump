@@ -18,10 +18,10 @@ import {
   type PowerUp,
 } from './engine';
 import { drawHud, drawPopups, FONT_FAMILY, type Hud } from './hud';
-import { PALETTE } from './palette';
+import { PALETTE, parseHex } from './palette';
 import { ACCESSORY_ANCHORS, DEFAULT_SKIN, type Pose, type Skin } from './skin';
 import type { SpriteName, Sprites } from './sprites';
-import { PIXELS_PER_METER, ZONE_HEIGHT_M, ZONES, zoneIndexAt } from './zones';
+import { backgroundAt, PIXELS_PER_METER, ZONES } from './zones';
 
 /**
  * Two layers (see docs/konzept-arcade.md, "Grafik"):
@@ -34,10 +34,16 @@ const BACKGROUND_WIDTH = WORLD_WIDTH / ART_PIXEL;
 const BACKGROUND_HEIGHT = VIEW_HEIGHT / ART_PIXEL;
 /** Spacing of the notepad grid, in art pixels. */
 const GRID = 10;
-/** The background blends into the next zone's over this many metres before the zone boundary. */
-const TRANSITION_M = 20;
 /** Imp shirt: centre of the logo relative to the monster position. */
 const LOGO_ANCHOR = { x: MONSTER_WIDTH / 2, y: 30 };
+
+/**
+ * Background of what the screen shows: chosen by the height of the screen's middle, so it also
+ * follows the camera during the intro descent. The score tab takes the same colour (GameScreen.tsx).
+ */
+export function viewBackground(state: GameState): ReturnType<typeof backgroundAt> {
+  return backgroundAt((state.startY - (state.cameraY + VIEW_HEIGHT / 2)) / PIXELS_PER_METER);
+}
 
 export class Renderer {
   private readonly background: HTMLCanvasElement;
@@ -111,14 +117,10 @@ export class Renderer {
    */
   private drawBackground(state: GameState) {
     const bg = this.backgroundCtx;
-    const meters = (state.startY - (state.cameraY + VIEW_HEIGHT / 2)) / PIXELS_PER_METER;
-    const index = zoneIndexAt(meters);
-    const boundary = (index + 1) * ZONE_HEIGHT_M;
-    const blend = index < ZONES.length - 1 ? Math.min(1, Math.max(0, (meters - (boundary - TRANSITION_M)) / TRANSITION_M)) : 0;
-    const next = ZONES[Math.min(index + 1, ZONES.length - 1)];
-    bg.fillStyle = mixColors(ZONES[index].background, next.background, blend);
+    const { zone, blend, color } = viewBackground(state);
+    bg.fillStyle = color;
     bg.fillRect(0, 0, BACKGROUND_WIDTH, BACKGROUND_HEIGHT);
-    if (index === 0) {
+    if (zone === 0) {
       bg.globalAlpha = 1 - blend;
       this.drawNotepad(state.cameraY);
       bg.globalAlpha = 1;
@@ -361,18 +363,7 @@ function drawPointsPlaceholder(ctx: CanvasRenderingContext2D, powerUp: PowerUp, 
 }
 
 /** Linear mix of two #rrggbb colours. */
-function mixColors(a: string, b: string, t: number): string {
-  const ca = parseHex(a);
-  const cb = parseHex(b);
-  const mixed = ca.map((v, i) => Math.round(v + (cb[i] - v) * t));
-  return `rgb(${mixed.join(',')})`;
-}
-
 function luminance(color: string): number {
   const [r, g, b] = parseHex(color);
   return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-}
-
-function parseHex(color: string): [number, number, number] {
-  return [1, 3, 5].map((i) => parseInt(color.slice(i, i + 2), 16)) as [number, number, number];
 }
