@@ -4,8 +4,8 @@ import Typography from '@mui/material/Typography';
 import { PALETTE } from '../game/palette';
 
 const KEYS: [string, string][] = [
-  ['← →', 'bewegen'],
-  ['Leertaste', 'springen'],
+  ['← → / A D', 'bewegen'],
+  ['Leertaste / ↑ W', 'springen'],
   ['F', 'schießen'],
   ['M', 'Ton an/aus'],
 ];
