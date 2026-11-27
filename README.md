@@ -163,7 +163,7 @@ podman compose down             # stoppen, die Highscores bleiben im Volume db-d
 podman compose down -v          # stoppen und alle Highscores löschen
 ```
 
-Dieselben Befehle als Kurzform im `Makefile` (`make` zeigt alle, mit Docker: `make start COMPOSE="docker compose"`):
+Dieselben Befehle als Kurzform im `Makefile` (`make` zeigt alle, mit Docker: `make start CONTAINER=docker`):
 
 | Befehl | Wirkung |
 |---|---|

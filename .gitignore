@@ -37,3 +37,6 @@ out/
 
 /podman/volumes/
 /.claude/
+
+# Einstellungen für compose.yaml (Port, DB-Passwort), siehe README "Als Container"
+.env
