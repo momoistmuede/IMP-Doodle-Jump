@@ -148,6 +148,57 @@ Für die Backend-Tests (`./gradlew build`) muss Testcontainers Podman finden. Un
 `sudo podman-mac-helper install` ausführen und die Podman-Maschine neu starten (`podman machine stop`,
 `podman machine start`). Zum reinen Spielen ist das nicht nötig.
 
+## Als Container (App und Datenbank)
+
+App und PostgreSQL laufen beide im Container, gebaut wird ebenfalls im Container (`Dockerfile`, mehrstufig).
+Nötig ist nur Podman mit Compose oder Docker, kein JDK und kein Node.js. Anders als die Gradle-Tasks oben
+funktioniert das auch unter **Windows**. Unter macOS und Windows braucht Podman eine laufende Maschine
+(`podman machine init`, `podman machine start`). `podman compose` nutzt `docker-compose` oder `podman-compose`,
+je nachdem, was installiert ist (macOS: `brew install docker-compose`, Windows: über Podman Desktop).
+
+```sh
+podman compose up -d --build    # bauen und starten (der erste Build dauert einige Minuten)
+podman compose logs -f app      # Log der App
+podman compose down             # stoppen, die Highscores bleiben im Volume db-data
+podman compose down -v          # stoppen und alle Highscores löschen
+```
+
+Spielen: **https**://localhost:9443. Das Zertifikat ist selbst signiert, der Browser warnt beim ersten Aufruf.
+Die Datenbank ist eine eigene, getrennt von der aus `pods-create`, und von außen nicht erreichbar. Beides kann
+neben `app-start` und dem Postgres-Pod laufen.
+
+Einstellungen als Umgebungsvariable oder in einer Datei `.env` neben `compose.yaml`:
+
+| Variable | Standard | Zweck |
+|---|---|---|
+| `DOODLE_PORT` | `9443` | Port auf dem Host |
+| `DOODLE_DB_PASSWORD` | `postgres` | Passwort der Datenbank. Wirkt nur beim allerersten Start, wenn das Volume angelegt wird |
+
+Ein echtes Zertifikat oder HTTP hinter einem Reverse Proxy: siehe die auskommentierten Zeilen beim Dienst
+`app` in `compose.yaml`.
+
+### Auf einen Server ausliefern
+
+Image bauen und als Datei kopieren. `--platform linux/amd64` erzeugt vom Mac (Apple Silicon) aus ein Image
+für x86-Server:
+
+```sh
+podman build --platform linux/amd64 -t imp-doodle-jump .
+podman save imp-doodle-jump | gzip > imp-doodle-jump.tar.gz
+scp imp-doodle-jump.tar.gz compose.yaml server:imp-doodle-jump/
+```
+
+Auf dem Server (Podman mit Compose oder Docker, `docker` statt `podman`):
+
+```sh
+cd imp-doodle-jump
+gunzip -c imp-doodle-jump.tar.gz | podman load
+podman compose up -d --no-build
+```
+
+Statt der Datei geht auch eine Registry: `podman tag` und `podman push`, dann in `compose.yaml` bei `image:` die
+Adresse in der Registry eintragen.
+
 ## Highscores
 
 Tabelle `highscore` (`name` als Primärschlüssel, `score`, `achieved_at`). Pro Name wird nur der beste
@@ -207,3 +258,4 @@ Die Backend-Tests brauchen eine laufende Podman-Machine (Testcontainers).
 | `frontend/src/game/engine.ts` | Spiellogik (Physik, Plattformen, Monster), ohne DOM |
 | `frontend/src/game/render.ts` | Zeichnen auf dem Canvas |
 | `frontend/src/ui` | Screens: Highscores, Spiel, Game Over |
+| `Dockerfile`, `compose.yaml` | Container-Image (Build im Container) und Start zusammen mit der Datenbank |

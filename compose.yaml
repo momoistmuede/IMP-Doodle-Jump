@@ -1,0 +1,59 @@
+# App and database as containers (see README, "Als Container"):
+#
+#   podman compose up -d --build     build and start (or: docker compose …)
+#   podman compose down              stop; the highscores stay in volume db-data
+#
+# Game: https://localhost:9443 (self-signed certificate). Settings via environment or a .env file next to this file:
+#   DOODLE_PORT          host port of the app (default 9443)
+#   DOODLE_DB_PASSWORD   password of the database user postgres (default postgres); only takes effect when
+#                        the volume is created, i.e. on the very first start
+name: imp-doodle-jump
+
+services:
+  db:
+    image: docker.io/library/postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: imp_doodle_jump
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DOODLE_DB_PASSWORD:-postgres}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # No published port: only the app talks to the database, and the dev pod keeps its port 5434.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d imp_doodle_jump"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    # Fully qualified: the name podman build gives the image and podman save/load keeps, so Docker finds it too.
+    image: localhost/imp-doodle-jump:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DOODLE_DB_URL: jdbc:postgresql://db:5432/imp_doodle_jump
+      DOODLE_DB_USER: postgres
+      DOODLE_DB_PASSWORD: ${DOODLE_DB_PASSWORD:-postgres}
+      # Real certificate instead of the bundled self-signed one: mount it and point the app at it.
+      # SERVER_SSL_CERTIFICATE: file:/certs/server.crt
+      # SERVER_SSL_CERTIFICATEPRIVATEKEY: file:/certs/server.key
+      # Behind a reverse proxy that terminates TLS: plain HTTP instead.
+      # SERVER_SSL_ENABLED: "false"
+    # volumes:
+    #   - ./certs:/certs:ro
+    ports:
+      - "${DOODLE_PORT:-9443}:9000"
+    healthcheck:
+      # HTTPS by default, HTTP when SERVER_SSL_ENABLED is false.
+      test: ["CMD-SHELL", "curl -fsk https://localhost:9000/actuator/health || curl -fs http://localhost:9000/actuator/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 60s
+
+volumes:
+  db-data:

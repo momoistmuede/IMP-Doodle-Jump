@@ -1,0 +1,11 @@
+# Build context for the Dockerfile: only what ./gradlew bootJar needs. Everything else stays out, in particular
+# local build output, node_modules and the database files of the dev pod (podman/volumes).
+*
+!gradlew
+!gradle/wrapper/
+!settings.gradle
+!build.gradle
+!src/main/
+!frontend/
+frontend/node_modules/
+frontend/dist/
