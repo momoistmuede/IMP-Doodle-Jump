@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CAP, ZONES, zoneIndexAt, zoneParams } from './zones';
+import { backgroundAt, CAP, ZONES, zoneIndexAt, zoneParams } from './zones';
+import { mixColors } from './palette';
 
 const M = 10; // px per metre
 
@@ -38,5 +39,13 @@ describe('zones', () => {
     for (let m = 0; m <= 9000; m += 100) {
       expect(zoneParams(m * M).maxGap).toBeLessThanOrEqual(170);
     }
+  });
+
+  it('blends the background into the next zone over the last 20 m', () => {
+    expect(backgroundAt(0)).toEqual({ zone: 0, blend: 0, color: mixColors(ZONES[0].background, ZONES[1].background, 0) });
+    expect(backgroundAt(980).blend).toBe(0);
+    expect(backgroundAt(990)).toEqual({ zone: 0, blend: 0.5, color: mixColors(ZONES[0].background, ZONES[1].background, 0.5) });
+    expect(backgroundAt(1000)).toEqual({ zone: 1, blend: 0, color: mixColors(ZONES[1].background, ZONES[2].background, 0) });
+    expect(backgroundAt(7999)).toEqual({ zone: 7, blend: 0, color: mixColors(ZONES[7].background, ZONES[7].background, 0) });
   });
 });

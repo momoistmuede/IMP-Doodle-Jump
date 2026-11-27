@@ -96,15 +96,17 @@ Alle Geräusche und die Musik klingen wie eine Spielkonsole der 80er (NES, Game 
 
 Das HUD wird direkt auf das Canvas gezeichnet (`render.ts`, neue Funktion `drawHud`) statt als MUI-Overlay.
 So bleibt alles scharf im Spielfeld, skaliert mit dem Canvas, und React muss nicht bei jeder
-Score-Änderung neu rendern.
+Score-Änderung neu rendern. Einzige Ausnahme ist der Score selbst: Er sitzt in einem Reiter auf der oberen
+Rahmenkante (siehe 1.1).
 
 Das untere Sechstel des Spielfelds bleibt frei von HUD-Elementen, damit dort später Touch-Buttons Platz
 haben (siehe Abschnitt 9).
 
 ```
-┌──────────────────────────────────────────┐
-│  ▲ 2000 m       001234         ♥ ♥ ♡     │
-│  ┃               HI 012345               │
+              ┌──────────────┐
+┌─────────────┤    001234    ├─────────────┐
+│             └──────────────┘   ♥ ♥ ♡     │
+│  ▲ 2000 m        HI 012345               │
 │  ┃             NEXT #3 004210            │
 │  ┃                                       │
 │  ┣━ 1483 m ◄ aktuelle Höhe               │
@@ -120,16 +122,22 @@ haben (siehe Abschnitt 9).
 └──────────────────────────────────────────┘
 ```
 
-### 1.1 Score: oben mittig, groß
+### 1.1 Score: im Reiter auf dem Rahmen, groß
 
-- Position: horizontal zentriert, oben, 32 Weltpixel Schrifthöhe. Die Zeilen `HI` und `NEXT` haben
-  16 Weltpixel.
+- Position: in einem Reiter, der mittig auf der oberen Rahmenkante sitzt, halb über dem Spielfeld, halb
+  darin. Der Reiter hat denselben Rahmen wie das Spielfeld (4 px, `slate`) und die Hintergrundfarbe der
+  aktuellen Zone, samt Übergang an der Zonengrenze (`backgroundAt` in `zones.ts`). Da er über das Canvas
+  hinausragt, ist er ein DOM-Element in `GameScreen.tsx`. Die Spielschleife schreibt Score und Farbe direkt
+  hinein, React rendert also weiterhin nicht bei jedem Frame neu.
+- Größe: 32 Weltpixel Schrifthöhe, 8 Weltpixel Innenabstand. Der Reiter skaliert mit dem Spielfeld;
+  Spielfeld und Reiter passen zusammen ins Fenster. Die Zeilen `HI` und `NEXT` haben 16 Weltpixel und
+  stehen direkt unter dem Reiter.
 - Schrift: Arcade-Schrift **„Press Start 2P“** (SIL Open Font License), selbst gehostet über das npm-Paket
   `@fontsource/press-start-2p`. Die CSP erlaubt nur `font-src 'self'`, ein Google-Fonts-Link ginge also
   nicht. Vor dem Spielstart `document.fonts.load('32px "Press Start 2P"')` abwarten, sonst zeichnet das
   Canvas im ersten Frame die Fallback-Schrift.
-- Format: 6 Stellen mit führenden Nullen (`001234`), weiße Schrift mit dunkler Kontur, damit sie auf jedem
-  Hintergrund lesbar ist.
+- Format: 6 Stellen mit führenden Nullen (`001234`), weiße Schrift mit dunkler Kontur wie alle HUD-Texte,
+  damit sie auf jedem Hintergrund lesbar ist.
 - Darunter klein `HI 012345`: der aktuelle Platz-1-Score. Sobald der Spieler ihn überholt, blinkt `HI` und
   zeigt den eigenen Score.
 - Noch eine Zeile darunter `NEXT #3 004210`: der nächste Platz der Top 10, den der Spieler noch nicht

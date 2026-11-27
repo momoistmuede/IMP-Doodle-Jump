@@ -7,6 +7,7 @@ import { PIXELS_PER_METER, ZONE_HEIGHT_M, ZONE_NAMES, zoneIndexAt } from './zone
 /**
  * The arcade HUD, drawn straight onto the canvas: it scales with the game and stays sharp, and React
  * does not re-render on every point. The lower sixth of the screen stays free for touch buttons later.
+ * Only the score sits outside, in a tab on the top edge of the frame (GameScreen.tsx).
  */
 export const FONT_FAMILY = '"Press Start 2P"';
 
@@ -50,7 +51,7 @@ export interface Hud {
   top: readonly number[];
   /** "+50" rising from defeated monsters, in world coordinates. */
   popups: Popup[];
-  /** Seconds left of the score pulse. */
+  /** Seconds left of the score pulse (score tab in GameScreen.tsx). */
   pulse: number;
   /** Place shown in the NEXT line (null = NEW #1); undefined before the first frame. */
   nextRank: number | null | undefined;
@@ -164,20 +165,14 @@ export function drawHud(ctx: CanvasRenderingContext2D, hud: Hud, state: GameStat
     ctx.globalAlpha = 1;
   }
 
-  ctx.save();
-  ctx.translate(center, 28);
-  const pulse = hud.pulse > 0 ? 1.1 : 1;
-  ctx.scale(pulse, pulse);
-  text(ctx, formatScore(state.score), 0, -16, 32, PALETTE.white, 'center');
-  ctx.restore();
-
+  // HI and NEXT start just below the score tab, which reaches about 26 world pixels into the playfield.
   const hi = hiScore(hud.top, state.score);
-  text(ctx, `HI ${formatScore(hi.score)}`, center, 54, 16, hi.beaten && blinkOn ? PALETTE.yellow : PALETTE.white, 'center');
+  text(ctx, `HI ${formatScore(hi.score)}`, center, 34, 16, hi.beaten && blinkOn ? PALETTE.yellow : PALETTE.white, 'center');
 
   if (hud.nextBlink === 0 || blinkOn) {
     const next = nextTarget(hud.top, state.score);
     const line = next ? `NEXT #${next.rank} ${formatScore(next.score)}` : 'NEW #1';
-    text(ctx, line, center, 76, 16, next ? PALETTE.white : PALETTE.gold, 'center');
+    text(ctx, line, center, 56, 16, next ? PALETTE.white : PALETTE.gold, 'center');
   }
 
   drawHearts(ctx, hud, state, sprites, scale);
