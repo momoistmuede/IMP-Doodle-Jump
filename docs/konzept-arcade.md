@@ -551,8 +551,11 @@ Meter schneller zählen sollen, z. B. 5 px = 1 m statt 10 px.
 Feste Regel, damit das Spiel immer schaffbar bleibt: Die „Kette“ aus erreichbaren Plattformen hält immer
 `MAX_GAP` (170 px) ein, auch an der Obergrenze. Brechende Plattformen und Stachelplattformen bleiben
 reine Köder. Verschwindende
-und zerbröselnde Plattformen dürfen Teil der Kette sein, weil sie einmal tragen. Die bestehenden
-Erreichbarkeits-Tests in `engine.test.ts` werden pro Zone und an der Obergrenze ausgeführt.
+und zerbröselnde Plattformen dürfen Teil der Kette sein, aber nie allein: Neben jeder steht auf derselben
+Höhe eine normale Plattform als zweiter Weg. Sonst wäre die Kette nach dem Benutzen unterbrochen, und wer
+darunter zurückfällt, käme trotz übriger Herzen nie wieder nach oben. Die bestehenden
+Erreichbarkeits-Tests in `engine.test.ts` werden pro Zone und an der Obergrenze ausgeführt, einer davon
+ohne die verschwindenden und zerbröselnden Plattformen.
 
 ### 4.3 Monster: Imps
 
